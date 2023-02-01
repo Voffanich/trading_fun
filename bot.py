@@ -1,14 +1,22 @@
+import json
+import pprint
+
 import pandas as pd
 import requests
 
 import levels
 
+with open('config.json') as config_file:
+    config = json.load(config_file)
+
 pair = "ETHUSDT" # Trading pair
-interval = "1h" # Timeframe 
-limit = 100 # Limit of candles requested 
+pair = "BTCUSDT" # Trading pair
+# pair = "AKROUSDT"
+timeframe = config['general']['trading_timeframe'] # Timeframe 
+limit = config['levels']['candle_depth']  # Limit of candles requested 
 
 
-url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval={interval}&limit={limit}"
+url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval={timeframe}&limit={limit}"
 
 response = requests.get(url)
 data = response.json()
@@ -22,5 +30,5 @@ for candle in data:
 df = pd.DataFrame(ohlcv_data, columns=["O_time", "Open", "High", "Low", "Close", "Volume"])
 # print(df)
 
-levels.find_levels(df, interval)
+levels.find_levels(df, timeframe)
 

@@ -1,0 +1,10 @@
+{
+    "general":{
+        "db_file_name": "bot.sqlite",
+        "trading_timeframe": "1h",
+        "timeframes_used": ["1m", "5m", "1h", "1d", "1w"]
+    },    
+    "levels":{
+        "candle_depth": 100
+    }
+}
