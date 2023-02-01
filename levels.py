@@ -10,14 +10,24 @@ class Resistance():
     time: datetime
     low: float
     high: float
+    broken: bool = False
+    timeframe: str = ''
+    
+    def __repr__(self):
+        return f"Resistance {self.time} - l: {self.low}, h: {self.high}, {self.timeframe}, {'not ' if not self.broken else ''}broken"
 
 @dataclass
 class Support():
     time: datetime
     low: float
     high: float
+    broken: bool = False
+    timeframe: str = ''
     
-def find_levels(candles: pd.DataFrame) -> list:
+    def __repr__(self):
+        return f"Support    {self.time} - l: {self.low}, h: {self.high}, {self.timeframe}, {'not ' if not self.broken else ''}broken"
+    
+def find_levels(candles: pd.DataFrame, timeframe: str) -> list:
     shift = 0
     pattern_type = ['Support', 'Resistance', '--']
     supports = []
@@ -55,8 +65,8 @@ def find_levels(candles: pd.DataFrame) -> list:
             support_time = datetime.fromtimestamp(int(candles.at[shift + level_time_shift, 'O_time'])/1000)
             
             if Support(time=support_time, low=min(lows), high=min(bodies)) not in supports:
-                supports.append(Support(time=support_time, low=min(lows), high=min(bodies)))
-                levels.append(Support(time=support_time, low=min(lows), high=min(bodies)))
+                supports.append(Support(time=support_time, low=min(lows), high=min(bodies), timeframe=timeframe))
+                levels.append(Support(time=support_time, low=min(lows), high=min(bodies), timeframe=timeframe))
         
         # checking for resistances 
         if analyze_pattern(candle_pattern) == 1:
@@ -75,8 +85,8 @@ def find_levels(candles: pd.DataFrame) -> list:
             resistance_time = datetime.fromtimestamp(int(candles.at[shift + level_time_shift, 'O_time'])/1000)
             
             if Resistance(time=resistance_time, low=max(bodies), high=max(highs)) not in resistances:
-                resistances.append(Resistance(time=resistance_time, low=max(bodies), high=max(highs)))
-                levels.append(Resistance(time=resistance_time, low=max(bodies), high=max(highs)))
+                resistances.append(Resistance(time=resistance_time, low=max(bodies), high=max(highs), timeframe=timeframe))
+                levels.append(Resistance(time=resistance_time, low=max(bodies), high=max(highs), timeframe=timeframe))
                 
                 
         #print(int(candles.at[shift + i, 'O_time']/10000))
@@ -84,11 +94,16 @@ def find_levels(candles: pd.DataFrame) -> list:
         # time = datetime.fromtimestamp(int(candles.at[shift, 'O_time'])/1000)    # timestamp from Binannce is in microseconds
         # print(time , ' ', level, ' ',  candle_pattern)            
         shift += 1
-        
-    for support in supports:
-        print(f'Support time: {support.time}, low: {support.low}, high: {support.high}')
-    for resistance in resistances:
-        print(f'Resistance time: {resistance.time}, low: {resistance.low}, high: {resistance.high}')
+    
+    
+    check_level_breaks(levels)
+    
+    for level in levels:
+        print(level) 
+    # for support in supports:
+    #     print(f'Support time: {support.time}, low: {support.low}, high: {support.high}')
+    # for resistance in resistances:
+    #     print(f'Resistance time: {resistance.time}, low: {resistance.low}, high: {resistance.high}')
         
     return levels
                     
@@ -123,3 +138,25 @@ def analyze_pattern(pattern: list):
     else: 
         return 2
         
+        
+def check_level_breaks(levels: list) -> list:
+
+    for i in range(0, len(levels) - 1):
+        shift = i + 1
+        print(f'levels len = {len(levels)}')
+        print(f'i={i}, k={shift}')
+        
+        if levels[i].__class__ is Resistance:
+            for k in range(shift, len(levels) - 1):
+                if levels[k].__class__ is Resistance and levels[k].low > levels[i].high:
+                     levels[i].broken = True
+                     break
+        elif levels[i].__class__ is Support:
+            for k in range(shift, len(levels) - 1):
+                if levels[k].__class__ is Support and levels[k].high < levels[i].low:
+                    levels[i].broken = True
+                    break
+        else:
+            print('Wrong level type(class)!')    
+            
+    return levels

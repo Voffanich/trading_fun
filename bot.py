@@ -5,7 +5,7 @@ import levels
 
 pair = "ETHUSDT" # Trading pair
 interval = "1h" # Timeframe 
-limit = 1000 # Limit of candles requested 
+limit = 100 # Limit of candles requested 
 
 
 url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval={interval}&limit={limit}"
@@ -22,5 +22,5 @@ for candle in data:
 df = pd.DataFrame(ohlcv_data, columns=["O_time", "Open", "High", "Low", "Close", "Volume"])
 # print(df)
 
-levels.find_levels(df)
+levels.find_levels(df, interval)
 
