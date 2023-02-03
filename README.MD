@@ -12,7 +12,8 @@ If the market situation meets needed conditions bot sends message to telegram us
 
 - [X] function detecting levels of supports and resistances on one pair and on the determined timeframe
 - [X] function checking if the level is already broken by existing candles and adding this info to level instance
-- [X] functions that receives market data from Binance (pair, timeframe, candle quantity) and returning Pandas dataframe of OHLVC data
+- [X] function that receives market data from Binance (pair, timeframe, candle quantity) and returning Pandas dataframe of OHLVC data
+- [ ] fucntion assigning density property to levels
 - [ ] function running candle check after the next candle closes
 - [ ] function checking closed candle to break through support or resistance level
 - [ ] function checking the possibility to make deal based on market situation and money and risk management
@@ -23,5 +24,7 @@ If the market situation meets needed conditions bot sends message to telegram us
 ## IDEAS
 
 - Different candle depth for different timeframes?
+- Store previous candle data and update only new candles or request all candle data each time?
+- Check level for each timeframe only after new candle closes?
 - Historical backtesting 
 - Optimization of deal parameters on historical data

@@ -10,8 +10,9 @@ class Resistance():
     time: datetime
     low: float
     high: float
-    broken: bool = False
-    timeframe: str = ''
+    timeframe: str
+    broken: bool = None
+    density: float = None 
     
     def __repr__(self):
         return "Resistance {} - l: {:<10} h: {:<10} {}, {}broken".format(self.time, self.low, self.high, self.timeframe, 'not ' if not self.broken else '')
@@ -21,12 +22,19 @@ class Support():
     time: datetime
     low: float
     high: float
-    broken: bool = False
-    timeframe: str = ''
+    timeframe: str
+    broken: bool = None
+    density: float = None   
     
     def __repr__(self):
         return f"Support    {self.time} - l: {self.low:<10} h: {self.high:<10} {self.timeframe}, {'not ' if not self.broken else ''}broken"
         # return f"Support    {self.time} - l: {self.low:9d}, h: {self.high:9d}, {self.timeframe}, {'not ' if not self.broken else ''}broken"
+        
+@dataclass
+class Deal():
+    
+    pass
+
     
 def find_levels(candles: pd.DataFrame, timeframe: str) -> list:
     shift = 0
@@ -143,7 +151,7 @@ def analyze_pattern(pattern: list):
 def check_level_breaks(levels: list) -> list:
     
     for i in range(0, len(levels)):
-        shift = i + 1
+        shift = i + 1       # shift for first index for later levels check
                 
         if levels[i].__class__ is Resistance:
             for k in range(shift, len(levels)):
@@ -160,3 +168,7 @@ def check_level_breaks(levels: list) -> list:
             
     return levels
 
+
+def check_deal(levels: list, last_candle: dict, deal_config: dict, pair: str) -> Deal:
+    
+    pass

@@ -2,9 +2,43 @@
     "general":{
         "db_file_name": "bot.sqlite",
         "trading_timeframe": "1h",
-        "timeframes_used": ["1m", "5m", "1h", "1d", "1w"]
+        "timeframes_used": ["1m", "5m", "1h", "1d", "1w"],
+        "all_timeframes": ["1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"],
+        "pairs": [
+            "BTCUSDT",
+            "ETHUSDT",
+            "BNBUSDT",
+            "LTCUSDT",
+            "ADAUSDT",
+            "DOTUSDT",
+            "APTUSDT",
+            "SOLUSDT",
+            "OPUSDT",
+            "XPRUSDT",
+            "DOGEUSDT",
+            "MATICUSDT",
+            "AVAXUSDT",
+            "MAGICUSDT",
+            "DYDXUSDT",
+            "MASKUSDT",
+            "ETCUSDT",
+            "NEARUSDT",
+            "SUSHIUSDT",
+            "ATOMUSDT",
+            "GALAUSDT"
+        ]
     },    
     "levels":{
-        "candle_depth": 100
+        "candle_depth": 100,
+        "basic_density": 1,
+        "broken_density_factor": 0.5,
+        "upper_level_density_factor": 2 
+    },
+    "deals":{
+        "stop_distance_mode": "",
+        "take_distance_mode": "",
+        "profit_loss_ratio": 1.8,
+        "deal_amount_of_bank": 0.03,
+        "leverage_on": true
     }
 }
