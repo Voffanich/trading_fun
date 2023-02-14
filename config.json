@@ -1,7 +1,7 @@
 {
     "general":{
         "db_file_name": "bot.sqlite",
-        "trading_timeframe": "1h",
+        "trading_timeframe": "5m",
         "timeframes_used": ["1m", "5m", "1h", "1d", "1w"],
         "all_timeframes": ["1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"],
         "pairs": [
