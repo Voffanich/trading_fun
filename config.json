@@ -1,9 +1,10 @@
 {
     "general":{
         "db_file_name": "bot.sqlite",
-        "trading_timeframe": "5m",
+        "trading_timeframe": "1m",
         "timeframes_used": ["1m", "5m", "1h", "1d", "1w"],
-        "all_timeframes": ["1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"],
+        "all_timeframes": ["1m", "5m", "1h", "4h", "1d", "1w", "1M"],
+        "basic_candle_depth": [400, 250, 200, 100, 100, 55, 24],
         "pairs": [
             "BTCUSDT",
             "ETHUSDT",
@@ -29,7 +30,7 @@
         ]
     },    
     "levels":{
-        "candle_depth": 100,
+        "candle_depth": 200,
         "basic_density": 1,
         "broken_density_factor": 0.5,
         "upper_level_density_factor": 2 
