@@ -169,6 +169,10 @@ def check_level_breaks(levels: list) -> list:
     return levels
 
 
+def assigng_level_density(levels: list) -> list:
+    
+    pass
+
 def check_deal(levels: list, last_candle: dict, deal_config: dict, pair: str) -> Deal:
     
     pass
