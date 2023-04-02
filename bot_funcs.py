@@ -21,4 +21,8 @@ def get_ohlcv_data_binance(pair: str, timeframe: str, limit: int = 100) -> pd.Da
         ohlcv_data.append(ohlcv)
    
     return pd.DataFrame(ohlcv_data, columns=["O_time", "Open", "High", "Low", "Close", "Volume"])
+
+def define_checked_timeframes(used_timeframes: list, timeframe: str) -> list:
+    del used_timeframes[0:used_timeframes.index(timeframe)]
+    return used_timeframes
         

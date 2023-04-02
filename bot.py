@@ -8,13 +8,13 @@ import requests
 import schedule
 
 import bot_funcs as bf
-import levels
+import levels as lv
 
 
 def test_check(timeframe):
     print(f'timeframe = {timeframe}, timestampt: {datetime.now()}')
 
-def check_schedule(timeframe):
+def set_schedule(timeframe):
     if timeframe == "1m":
         schedule.every().minute.at(":05").do(test_check, timeframe)
     elif timeframe == "5m":
@@ -54,20 +54,30 @@ def check_schedule(timeframe):
 config = bf.load_config()
 
 pair = "ETHUSDT" # Trading pair
-pair = "BTCUSDT" # Trading pair
+# pair = "API3USDT" # Trading pair
+# pair = "BTCUSDT" # Trading pair
 # pair = "AKROUSDT"
 
 timeframe = config['general']['trading_timeframe'] # Timeframe 
+checked_timeframes = bf.define_checked_timeframes(config['general']['timeframes_used'], timeframe)
 limit = config['levels']['candle_depth']  # Limit of candles requested 
+basic_candle_depth = config['general']['basic_candle_depth'] # number of candles to check for each checked timeframe
+
+levels = []       # list of levels of all checked timeframes at current moment
+
+for timeframe in checked_timeframes:
+    df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe])
+    levels += lv.find_levels(df, timeframe)
+
+levels = lv.assign_level_density(levels, checked_timeframes, config['levels'])
+
+for level in levels:
+        print(level)
 
 
 
-df = bf.get_ohlcv_data_binance(pair, timeframe, limit)
+# set_schedule(timeframe)
 
-levels.find_levels(df, timeframe)
-
-check_schedule(timeframe)
-
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+# while True:
+#     schedule.run_pending()
+#     time.sleep(1)

@@ -15,7 +15,8 @@ class Resistance():
     density: float = None 
     
     def __repr__(self):
-        return "Resistance {} - l: {:<10} h: {:<10} {}, {}broken".format(self.time, self.low, self.high, self.timeframe, 'not ' if not self.broken else '')
+        return "Resistance {} - l: {:<10} h: {:<10} {}, {:<10}, {}".format(self.time, self.low, self.high, self.timeframe, 
+                                                                           'not broken' if not self.broken else 'broken', self.density)
 
 @dataclass
 class Support():
@@ -27,7 +28,20 @@ class Support():
     density: float = None   
     
     def __repr__(self):
-        return f"Support    {self.time} - l: {self.low:<10} h: {self.high:<10} {self.timeframe}, {'not ' if not self.broken else ''}broken"
+        return f"Support    {self.time} - l: {self.low:<10} h: {self.high:<10} {self.timeframe}, {'not broken' if not self.broken else 'broken':<10}, {self.density}"
+        # return f"Support    {self.time} - l: {self.low:9d}, h: {self.high:9d}, {self.timeframe}, {'not ' if not self.broken else ''}broken"
+        
+@dataclass
+class Level():
+    time: datetime
+    low: float
+    high: float
+    timeframe: str
+    broken: bool = None
+    density: float = None   
+    
+    def __repr__(self):
+        return f"Level      {self.time} - l: {self.low:<10} h: {self.high:<10} {self.timeframe}, {'not broken' if not self.broken else 'broken':<10}, {self.density}"
         # return f"Support    {self.time} - l: {self.low:9d}, h: {self.high:9d}, {self.timeframe}, {'not ' if not self.broken else ''}broken"
         
 @dataclass
@@ -107,8 +121,8 @@ def find_levels(candles: pd.DataFrame, timeframe: str) -> list:
     
     check_level_breaks(levels)
     
-    for level in levels:
-        print(level) 
+    # for level in levels:
+    #     print(level) 
     # for support in supports:
     #     print(f'Support time: {support.time}, low: {support.low}, high: {support.high}')
     # for resistance in resistances:
@@ -168,10 +182,71 @@ def check_level_breaks(levels: list) -> list:
             
     return levels
 
-
-def assigng_level_density(levels: list) -> list:
+def merge_all_levels(levels: list) -> list:
+    # for level in levels:
+    #     for level2 in levels:
+    #         if ((level.low <= level2.high and level.low >= level2.low) or (level.high <= level2.high and level.high >= level2.low)) and level != level2:
+    #             new_level = Level(min(level.time, level2.time), min(level.low, level2.low), max(level.high, level2.high), 
+    #                                    level.timeframe, level.broken or level2.broken, level.density + level2.density)
+    #             # levels.remove(level)
+    #             # levels.remove(level2)
+    #             levels.append(new_level)
+    #             print('New level ', new_level)
+    #         else:
+    #             print('No intersections')
     
-    pass
+    while True:  
+        intersections = 0          
+        for index, level in enumerate(levels):
+            for index2, level2 in enumerate(levels):
+                if index2 > index:
+                    if ((level.low <= level2.high and level.low >= level2.low) or (level.high <= level2.high and level.high >= level2.low)) and level != level2:
+                        new_level = Level(min(level.time, level2.time), min(level.low, level2.low), max(level.high, level2.high), 
+                                        higher_timeframe(level.timeframe, level2.timeframe), level.broken or level2.broken, level.density + level2.density)
+                        # print(f'New level: {new_level}')
+                        # print(f'len(levels) = {len(levels)}')
+                        # print(f'index = {index}')
+                        # print(f'index2 = {index2}')
+                        del levels[index2]
+                        del levels[index]
+                        levels.append(new_level)
+                        intersections += 1
+                    # else:
+                    #     new_level = Level(level.time, level.low, level.high, level.timeframe, level.broken, level.density)
+                    #     del levels[index]
+                    #     levels.append(new_level)
+        if intersections == 0:
+            break
+    return levels
+
+def higher_timeframe(timeframe1, timeframe2):
+    timeframes = ["1m", "5m", "1h", "4h", "1d", "1w", "1M"]
+    if timeframes.index(timeframe1) >= timeframes.index(timeframe2):
+        return timeframe1
+    else:
+        return timeframe2
+
+def assign_level_density(levels: list, checked_timeframes: list, levels_config: dict) -> list:
+    density_coefficient = 1
+    broken_density_factor = levels_config['broken_density_factor']
+    upper_level_density_factor = levels_config['upper_level_density_factor']
+    
+    for timeframe in checked_timeframes:
+        for level in levels:
+            if level.broken and level.timeframe == timeframe:
+                level.density = density_coefficient * broken_density_factor
+            if not level.broken and level.timeframe == timeframe:
+                level.density = density_coefficient
+        
+        density_coefficient *= upper_level_density_factor
+    
+    for level in levels:
+        print(level)
+    print('______________')
+    
+    levels = merge_all_levels(levels)
+        
+    return levels
 
 def check_deal(levels: list, last_candle: dict, deal_config: dict, pair: str) -> Deal:
     
