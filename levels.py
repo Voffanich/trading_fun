@@ -56,6 +56,8 @@ def find_levels(candles: pd.DataFrame, timeframe: str) -> list:
     supports = []
     resistances = []
     levels = []     # supports and resistances combined in one list
+    last_candle_close = float(candles.at[candles.shape[0] - 2, 'Close'])  # close price of the last candle to see the break of the last levels
+    
         
     for _ in range(0, candles.shape[0] - 4):    # Go through all candles in dataframe
         
@@ -119,7 +121,7 @@ def find_levels(candles: pd.DataFrame, timeframe: str) -> list:
         shift += 1
     
     
-    check_level_breaks(levels)
+    levels = check_level_breaks(levels, last_candle_close)
     
     # for level in levels:
     #     print(level) 
@@ -162,19 +164,19 @@ def analyze_pattern(pattern: list):
         return 2
         
         
-def check_level_breaks(levels: list) -> list:
+def check_level_breaks(levels: list, last_candle_close: float) -> list:
     
     for i in range(0, len(levels)):
         shift = i + 1       # shift for first index for later levels check
                 
         if levels[i].__class__ is Resistance:
             for k in range(shift, len(levels)):
-                if levels[k].__class__ is Resistance and levels[k].low > levels[i].high:
+                if levels[k].__class__ is Resistance and (levels[k].low > levels[i].high or last_candle_close > levels[i].high):
                      levels[i].broken = True
                      break
         elif levels[i].__class__ is Support:
             for k in range(shift, len(levels)):
-                if levels[k].__class__ is Support and levels[k].high < levels[i].low:
+                if levels[k].__class__ is Support and (levels[k].high < levels[i].low or last_candle_close < levels[i].low):
                     levels[i].broken = True
                     break
         else:
@@ -182,6 +184,7 @@ def check_level_breaks(levels: list) -> list:
             
     return levels
 
+# CHECK THE ALGO FOR USE OF WHILE INSTEAD OF FOR 
 def merge_all_levels(levels: list) -> list:
     # for level in levels:
     #     for level2 in levels:
@@ -244,8 +247,27 @@ def assign_level_density(levels: list, checked_timeframes: list, levels_config: 
         print(level)
     print('______________')
     
-    levels = merge_all_levels(levels)
+    # levels = merge_all_levels(levels)
         
+    return levels
+
+def optimize_levels(levels: list, checked_timeframes: list) -> list:
+    basic_timeframe = True
+    for timeframe in checked_timeframes:
+        
+        index = 0
+        while index < len(levels):
+            if levels[index].timeframe == timeframe and basic_timeframe:
+                
+                if levels[index].broken:
+                    del levels[index]
+                else:
+                    index += 1    
+            else:
+                break                   
+                    
+        basic_timeframe = False    
+       
     return levels
 
 def check_deal(levels: list, last_candle: dict, deal_config: dict, pair: str) -> Deal:

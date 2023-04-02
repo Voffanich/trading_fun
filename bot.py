@@ -71,6 +71,8 @@ for timeframe in checked_timeframes:
 
 levels = lv.assign_level_density(levels, checked_timeframes, config['levels'])
 
+levels = lv.optimize_levels(levels, checked_timeframes)
+
 for level in levels:
         print(level)
 
