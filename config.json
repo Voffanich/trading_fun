@@ -6,7 +6,7 @@
         "all_timeframes": ["1m", "5m", "1h", "4h", "1d", "1w", "1M"],
         "basic_candle_depths": [400, 250, 200, 100, 100, 55, 24],
         "basic_candle_depth": {"1m":400, "5m":288, "1h":240, "4h":100, "1d":100, "1w":55, "1M":24},
-        "pairs": [
+        "trading_pairs": [
             "BTCUSDT",
             "ETHUSDT",
             "BNBUSDT",
@@ -16,7 +16,7 @@
             "APTUSDT",
             "SOLUSDT",
             "OPUSDT",
-            "XPRUSDT",
+            
             "DOGEUSDT",
             "MATICUSDT",
             "AVAXUSDT",
@@ -36,7 +36,7 @@
         "broken_density_factor": 0.5,
         "upper_level_density_factor": 2 
     },
-    "deals":{
+    "deal_config":{
         "stop_distance_mode": "",
         "take_distance_mode": "",
         "profit_loss_ratio": 1.8,

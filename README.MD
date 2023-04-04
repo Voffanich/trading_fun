@@ -13,7 +13,7 @@ If the market situation meets needed conditions bot sends message to telegram us
 - [X] function detecting levels of supports and resistances on one pair and on the determined timeframe
 - [X] function checking if the level is already broken by existing candles and adding this info to level instance
 - [X] function that receives market data from Binance (pair, timeframe, candle quantity) and returning Pandas dataframe of OHLVC data
-- [ ] fucntion assigning density property to levels
+- [X] fucntion assigning density property to levels
 - [ ] function running candle check after the next candle closes
 - [ ] function checking closed candle to break through support or resistance level
 - [ ] function checking the possibility to make deal based on market situation and money and risk management

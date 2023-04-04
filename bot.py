@@ -58,23 +58,36 @@ pair = "ETHUSDT" # Trading pair
 # pair = "BTCUSDT" # Trading pair
 # pair = "AKROUSDT"
 
-timeframe = config['general']['trading_timeframe'] # Timeframe 
-checked_timeframes = bf.define_checked_timeframes(config['general']['timeframes_used'], timeframe)
+trading_pairs = config['general']['trading_pairs']
+trading_timeframe = config['general']['trading_timeframe'] # Timeframe 
+checked_timeframes = bf.define_checked_timeframes(config['general']['timeframes_used'], trading_timeframe)
 limit = config['levels']['candle_depth']  # Limit of candles requested 
 basic_candle_depth = config['general']['basic_candle_depth'] # number of candles to check for each checked timeframe
+deal_config = config['deal_config']
 
-levels = []       # list of levels of all checked timeframes at current moment
 
-for timeframe in checked_timeframes:
-    df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe])
-    levels += lv.find_levels(df, timeframe)
+def check_pair(pair: list):
+    levels = []       # list of levels of all checked timeframes at current moment
 
-levels = lv.assign_level_density(levels, checked_timeframes, config['levels'])
+    for timeframe in checked_timeframes:
+        df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe])
+        if timeframe == trading_timeframe:
+            last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
+        levels += lv.find_levels(df, timeframe)
+        time.sleep(0.5)
+        
+    levels = lv.assign_level_density(levels, checked_timeframes, config['levels'])
 
-levels = lv.optimize_levels(levels, checked_timeframes)
+    levels = lv.optimize_levels(levels, checked_timeframes) # delete broken levels of the basic timeframe
 
-for level in levels:
-        print(level)
+    lv.check_deal(levels, last_candle, deal_config, trading_timeframe)
+
+for pair in trading_pairs:
+    print(f'\nPair {pair}')
+    check_pair(pair)
+
+# for level in levels:
+#         print(level)
 
 
 
