@@ -1,7 +1,7 @@
 {
     "general":{
         "db_file_name": "bot.sqlite",
-        "trading_timeframe": "5m",
+        "trading_timeframe": "1m",
         "timeframes_used": ["1m", "5m", "1h", "1d"],
         "all_timeframes": ["1m", "5m", "1h", "4h", "1d", "1w", "1M"],
         "basic_candle_depths": [400, 250, 200, 100, 100, 55, 24],
@@ -16,7 +16,6 @@
             "APTUSDT",
             "SOLUSDT",
             "OPUSDT",
-            
             "DOGEUSDT",
             "MATICUSDT",
             "AVAXUSDT",

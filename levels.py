@@ -222,14 +222,28 @@ def merge_all_levels(levels: list) -> list:
             break
     return levels
 
-def merge_levels(levels: list) -> list:
-    
-    
-    index = 0
-    while index < len(levels):
-        pass
-    
-    pass
+def merge_timeframe_levels(levels: list, console_log: bool = False) -> list:
+    while True: 
+        intercections = 0
+        for index, level in enumerate(levels):
+            for index2, level2 in enumerate(levels):
+                if index2 > index:
+                    if level.timeframe == level2.timeframe and level.__class__ == level2.__class__:
+                        if ((level.low <= level2.high and level.low >= level2.low) or (level.high <= level2.high and level.high >= level2.low)) and level != level2:
+                            merged_level = level.__class__(max(level.time, level2.time), min(level.low, level2.low), max(level.high, level2.high), 
+                                        level.timeframe, level.broken and level2.broken, level.density + level2.density)
+                            if console_log:
+                                print(f'\nFound two levels with intersection')
+                                print(f'level=        {level}')
+                                print(f'level2=       {level2}')
+                                print(f'merged level= {merged_level}')
+                            levels.append(merged_level)
+                            del levels[index2]
+                            del levels[index] 
+                            intercections += 1   
+        if intercections == 0:
+            break
+    return levels
 
 def higher_timeframe(timeframe1, timeframe2):
     timeframes = ["1m", "5m", "1h", "4h", "1d", "1w", "1M"]
@@ -260,6 +274,7 @@ def assign_level_density(levels: list, checked_timeframes: list, levels_config: 
         
     return levels
 
+# just delete broken levels of basic timeframe
 def optimize_levels(levels: list, checked_timeframes: list) -> list:
     basic_timeframe = True
     for timeframe in checked_timeframes:
@@ -295,3 +310,6 @@ def check_deal(levels: list, last_candle: object, deal_config: dict, trading_tim
             print(f'Level {level} broken up')
         
     
+def print_levels(levels: list):
+    for level in levels:
+        print(level)

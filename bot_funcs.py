@@ -2,7 +2,7 @@ import json
 
 import pandas as pd
 import requests
-
+import schedule
 
 def load_config() -> dict:
     with open('config.json') as config_file:
@@ -26,3 +26,37 @@ def define_checked_timeframes(used_timeframes: list, timeframe: str) -> list:
     del used_timeframes[0:used_timeframes.index(timeframe)]
     return used_timeframes
         
+def set_schedule(timeframe: str, task, trading_pairs: list):
+    if timeframe == "1m":
+        schedule.every().minute.at(":05").do(task, trading_pairs)
+    elif timeframe == "5m":
+        schedule.every().hour.at("00:05").do(task, trading_pairs)
+        schedule.every().hour.at("05:05").do(task, trading_pairs)
+        schedule.every().hour.at("10:05").do(task, trading_pairs)
+        schedule.every().hour.at("15:05").do(task, trading_pairs)
+        schedule.every().hour.at("20:05").do(task, trading_pairs)
+        schedule.every().hour.at("25:05").do(task, trading_pairs)
+        schedule.every().hour.at("30:05").do(task, trading_pairs)
+        schedule.every().hour.at("35:05").do(task, trading_pairs)
+        schedule.every().hour.at("40:05").do(task, trading_pairs)
+        schedule.every().hour.at("45:05").do(task, trading_pairs)
+        schedule.every().hour.at("50:05").do(task, trading_pairs)
+        schedule.every().hour.at("55:05").do(task, trading_pairs)
+    elif timeframe == "15m":
+        schedule.every().hour.at("00:05").do(task, trading_pairs)
+        schedule.every().hour.at("15:05").do(task, trading_pairs)
+        schedule.every().hour.at("30:05").do(task, trading_pairs)
+        schedule.every().hour.at("45:05").do(task, trading_pairs)
+    elif timeframe == "1h":
+        schedule.every().hour.at("00:05").do(task, trading_pairs)
+    elif timeframe == "4h":
+        schedule.every().day.at("00:00:05").do(task, trading_pairs)
+        schedule.every().day.at("04:00:05").do(task, trading_pairs)
+        schedule.every().day.at("08:00:05").do(task, trading_pairs)
+        schedule.every().day.at("12:00:05").do(task, trading_pairs)
+        schedule.every().day.at("16:00:05").do(task, trading_pairs)
+        schedule.every().day.at("20:00:05").do(task, trading_pairs)
+    elif timeframe == "1d":
+        schedule.every().day.at("00:00:05").do(task, trading_pairs)
+    else:
+        print("Invalid time period string")
