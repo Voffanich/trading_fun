@@ -56,7 +56,7 @@ def find_levels(candles: pd.DataFrame, timeframe: str) -> list:
     supports = []
     resistances = []
     levels = []     # supports and resistances combined in one list
-    last_candle_close = float(candles.at[candles.shape[0] - 2, 'Close'])  # close price of the last candle to see the break of the last levels
+    prelast_candle_close = float(candles.at[candles.shape[0] - 3, 'Close'])  # close price of the PRE-last closed candle to see the break of the last levels
     
         
     for _ in range(0, candles.shape[0] - 4):    # Go through all candles in dataframe
@@ -121,7 +121,7 @@ def find_levels(candles: pd.DataFrame, timeframe: str) -> list:
         shift += 1
     
     
-    levels = check_level_breaks(levels, last_candle_close)
+    levels = check_level_breaks(levels, prelast_candle_close)
     
     # for level in levels:
     #     print(level) 
@@ -164,19 +164,19 @@ def analyze_pattern(pattern: list):
         return 2
         
         
-def check_level_breaks(levels: list, last_candle_close: float) -> list:
+def check_level_breaks(levels: list, prelast_candle_close: float) -> list:
     
     for i in range(0, len(levels)):
         shift = i + 1       # shift for first index for later levels check
                 
         if levels[i].__class__ is Resistance:
             for k in range(shift, len(levels)):
-                if levels[k].__class__ is Resistance and (levels[k].low > levels[i].high or last_candle_close > levels[i].high):
+                if levels[k].__class__ is Resistance and (levels[k].low > levels[i].high or prelast_candle_close > levels[i].high):
                      levels[i].broken = True
                      break
         elif levels[i].__class__ is Support:
             for k in range(shift, len(levels)):
-                if levels[k].__class__ is Support and (levels[k].high < levels[i].low or last_candle_close < levels[i].low):
+                if levels[k].__class__ is Support and (levels[k].high < levels[i].low or prelast_candle_close < levels[i].low):
                     levels[i].broken = True
                     break
         else:
@@ -222,6 +222,15 @@ def merge_all_levels(levels: list) -> list:
             break
     return levels
 
+def merge_levels(levels: list) -> list:
+    
+    
+    index = 0
+    while index < len(levels):
+        pass
+    
+    pass
+
 def higher_timeframe(timeframe1, timeframe2):
     timeframes = ["1m", "5m", "1h", "4h", "1d", "1w", "1M"]
     if timeframes.index(timeframe1) >= timeframes.index(timeframe2):
@@ -243,9 +252,9 @@ def assign_level_density(levels: list, checked_timeframes: list, levels_config: 
         
         density_coefficient *= upper_level_density_factor
     
-    for level in levels:
-        print(level)
-    print('______________')
+    # for level in levels:
+    #     print(level)
+    # print('______________')
     
     # levels = merge_all_levels(levels)
         
@@ -270,6 +279,19 @@ def optimize_levels(levels: list, checked_timeframes: list) -> list:
        
     return levels
 
-def check_deal(levels: list, last_candle: dict, deal_config: dict, pair: str) -> Deal:
-    
+def filter_basic_timeframe_levels(level):
     pass
+    
+
+def check_deal(levels: list, last_candle: object, deal_config: dict, trading_timeframe: str) -> Deal:
+    basic_timeframe_levels = list(filter(lambda level: level.timeframe == trading_timeframe, levels))
+    
+    for level in basic_timeframe_levels: 
+        if float(last_candle.Open) > level.low and float(last_candle.Close) < level.low and level.__class__ is Support:
+            print(f'Last candle: O {last_candle.Open}, С {last_candle.Close}')
+            print(f'Level {level} broken down')
+        elif float(last_candle.Open) < level.high and float(last_candle.Close) > level.high  and level.__class__ is Resistance:
+            print(f'Last candle: O {last_candle.Open}, С {last_candle.Close}')
+            print(f'Level {level} broken up')
+        
+    
