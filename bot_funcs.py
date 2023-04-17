@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 import schedule
 
+
 def load_config() -> dict:
     with open('config.json') as config_file:
         return json.load(config_file)
@@ -27,6 +28,7 @@ def define_checked_timeframes(used_timeframes: list, timeframe: str) -> list:
     return used_timeframes
         
 def set_schedule(timeframe: str, task, trading_pairs: list):
+    print(f'Waiting for the beginning of the {timeframe} timeframe period...\n')
     if timeframe == "1m":
         schedule.every().minute.at(":05").do(task, trading_pairs)
     elif timeframe == "5m":

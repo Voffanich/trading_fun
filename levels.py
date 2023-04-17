@@ -301,14 +301,30 @@ def filter_basic_timeframe_levels(level):
 def check_deal(levels: list, last_candle: object, deal_config: dict, trading_timeframe: str) -> Deal:
     basic_timeframe_levels = list(filter(lambda level: level.timeframe == trading_timeframe, levels))
     
+    print(f'deal_config = {deal_config}')
+    
     for level in basic_timeframe_levels: 
         if float(last_candle.Open) > level.low and float(last_candle.Close) < level.low and level.__class__ is Support:
             print(f'Last candle: O {last_candle.Open}, С {last_candle.Close}')
             print(f'Level {level} broken down')
+            
+            stop_price(levels, last_candle, deal_config, level.__class__)
+            take_price(levels, last_candle, deal_config)
+            
         elif float(last_candle.Open) < level.high and float(last_candle.Close) > level.high  and level.__class__ is Resistance:
             print(f'Last candle: O {last_candle.Open}, С {last_candle.Close}')
             print(f'Level {level} broken up')
         
+
+def stop_price(levels: list, last_candle: object, deal_config: dict, broken_level_type: str) -> list:
+    
+    pass
+
+
+def take_price() -> list:
+    pass
+
+
     
 def print_levels(levels: list):
     for level in levels:

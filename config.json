@@ -36,10 +36,18 @@
         "upper_level_density_factor": 2 
     },
     "deal_config":{
-        "stop_distance_mode": "",
-        "take_distance_mode": "",
+        "stop_distance_mode": "far_level_price",
+        "stop_distance_modes": ["far_level_price", "middle_level_price", "close_level_price"],
+        "take_distance_mode": "far_level_price",
+        "take_distance_modes": ["far_level_price", "middle_level_price", "close_level_price"],
+        "stop_offset_mode": "dist_percentage",
+        "take_offset_mode": "dist_percentage",
+        "stop_offset_modes": {"dist_percentage": 5, "lower_atr_x" : 1, "level_percentage": 10},
+        "take_offset_modes": {"dist_percentage": 5, "lower_atr_x" : 1, "level_percentage": 10},
+        "considering_level_density": 1,
         "profit_loss_ratio": 1.8,
         "deal_amount_of_bank": 0.03,
-        "leverage_on": true
+        "leverage_on": true,
+        "max_leverage": 10
     }
 }

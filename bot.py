@@ -10,7 +10,6 @@ import schedule
 import bot_funcs as bf
 import levels as lv
 
-
 config = bf.load_config()
 
 pair = "ETHUSDT" # Trading pair
@@ -57,7 +56,7 @@ def main_func(trading_pairs: list):
     for pair in trading_pairs:
         print(f'\nPair {pair}')
         check_pair(pair)
-
+    print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
 bf.set_schedule(trading_timeframe, main_func, trading_pairs)
 
 
@@ -68,3 +67,4 @@ bf.set_schedule(trading_timeframe, main_func, trading_pairs)
 while True:
     schedule.run_pending()
     time.sleep(1)
+    
