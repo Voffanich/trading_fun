@@ -1,4 +1,5 @@
 import json
+import time
 
 import pandas as pd
 import requests
@@ -62,3 +63,7 @@ def set_schedule(timeframe: str, task, trading_pairs: list):
         schedule.every().day.at("00:00:05").do(task, trading_pairs)
     else:
         print("Invalid time period string")
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

@@ -1,14 +1,20 @@
 import json
 import pprint
+import threading
 import time
 from datetime import datetime
 
 import pandas as pd
 import requests
 import schedule
+import telebot
+from telebot import types
 
 import bot_funcs as bf
 import levels as lv
+from user_data.credentials import apikey
+
+bot = telebot.TeleBot(apikey)
 
 config = bf.load_config()
 
@@ -26,7 +32,7 @@ deal_config = config['deal_config']     # config for deal estimation
 
 
 
-def check_pair(pair: str):
+def check_pair(bot, chat_id, pair: str):
     levels = []       # list of levels of all checked timeframes at current moment
 
     for timeframe in checked_timeframes:
@@ -46,25 +52,43 @@ def check_pair(pair: str):
     
     # lv.print_levels(levels)
     
-    lv.check_deal(levels, last_candle, deal_config, trading_timeframe)
+    lv.check_deal(bot, chat_id, levels, last_candle, deal_config, trading_timeframe)
+    
+chat_id = 234637822
 
 # check_pair(pair)
-
+@bot.message_handler(commands=['start'])
+def start(message, res=False):
+    bot.send_message(message.chat.id, text="Привет, бро!")
+    global chat_id
+    chat_id = message.from_user.id
+    print(chat_id)
+    
 
 def main_func(trading_pairs: list):
     print(datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S'))
+    bot.send_message(chat_id, text=datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S'))
     for pair in trading_pairs:
         print(f'\nPair {pair}')
-        check_pair(pair)
+        check_pair(bot, chat_id, pair)
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
-bf.set_schedule(trading_timeframe, main_func, trading_pairs)
-
+    bot.send_message(chat_id, text=f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
+    
 
 
 
 # set_schedule(timeframe)
 
-while True:
-    schedule.run_pending()
-    time.sleep(1)
+# while True:
+#     schedule.run_pending()
+#     time.sleep(1)
+
+sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule, kwargs = {'timeframe':trading_timeframe, 
+                                                    'task':main_func, 'trading_pairs':trading_pairs}, daemon = True)
     
+if __name__ == '__main__':
+    sсheduled_tasks_thread.start()
+    try:
+        bot.polling(non_stop = True, interval = 0, timeout = 0)
+    except:
+        pass

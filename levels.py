@@ -298,31 +298,116 @@ def filter_basic_timeframe_levels(level):
     pass
     
 
-def check_deal(levels: list, last_candle: object, deal_config: dict, trading_timeframe: str) -> Deal:
+def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dict, trading_timeframe: str) -> Deal:
+    
     basic_timeframe_levels = list(filter(lambda level: level.timeframe == trading_timeframe, levels))
     
-    print(f'deal_config = {deal_config}')
+    take_price = 0
+    stop_price = 0
+    
+    # print(f'deal_config = {deal_config}')
     
     for level in basic_timeframe_levels: 
         if float(last_candle.Open) > level.low and float(last_candle.Close) < level.low and level.__class__ is Support:
-            print(f'Last candle: O {last_candle.Open}, С {last_candle.Close}')
-            print(f'Level {level} broken down')
+            message = f'Last candle: O {last_candle.Open}, С {last_candle.Close}'
+            print(message)
+            bot.send_message(chat_id, text=message)
             
-            stop_price(levels, last_candle, deal_config, level.__class__)
-            take_price(levels, last_candle, deal_config)
+            message = f'Level {level} broken down'
+            print(message)
+            bot.send_message(chat_id, text=message)
+            
+            
+            stop_price = get_stop_price(bot, chat_id, levels, last_candle, deal_config, level.__class__)
+            take_price = get_take_price(bot, chat_id, levels, last_candle, deal_config, level.__class__)
+            
+            print(f'{take_price=}')
+            print(f'{stop_price=}')
             
         elif float(last_candle.Open) < level.high and float(last_candle.Close) > level.high  and level.__class__ is Resistance:
-            print(f'Last candle: O {last_candle.Open}, С {last_candle.Close}')
-            print(f'Level {level} broken up')
+            message = f'Last candle: O {last_candle.Open}, С {last_candle.Close}'
+            print(message)
+            bot.send_message(chat_id, text=message)
+            
+            message = f'Level {level} broken up'
+            print(message)
+            bot.send_message(chat_id, text=message)
+            
+            stop_price = get_stop_price(bot, chat_id, levels, last_candle, deal_config, level.__class__)
+            take_price = get_take_price(bot, chat_id, levels, last_candle, deal_config, level.__class__)
+            
+            print(f'{take_price=}')
+            print(f'{stop_price=}')
         
 
-def stop_price(levels: list, last_candle: object, deal_config: dict, broken_level_type: str) -> list:
+def get_take_price(bot, chat_id, levels: list, last_candle: object, deal_config: dict, broken_level_type: str) -> float:
     
-    pass
+    if broken_level_type is Support:
+        levels_ahead = list(filter(lambda level: level.high < float(last_candle.Close) and level.density >= deal_config['considering_level_density'], levels))
+        levels_ahead = sorted(levels_ahead, key=lambda level: level.high, reverse=True)
+        # print_levels(levels_ahead)
+        
+        if deal_config['take_distance_mode'] == 'far_level_price':
+            
+            if deal_config['take_offset_mode'] == 'dist_percentage':
+                
+                adjustment = (float(last_candle.Close) - levels_ahead[0].low) * deal_config['take_offset_modes']['dist_percentage'] / 100
+                
+                # print(f'{adjustment=}')
+                
+                return levels_ahead[0].low + adjustment
+        
+    elif broken_level_type is Resistance:
+        levels_ahead = list(filter(lambda level: level.low > float(last_candle.Close) and level.density >= deal_config['considering_level_density'], levels))
+        levels_ahead = sorted(levels_ahead, key=lambda level: level.low)
+        # print_levels(levels_ahead)
+        
+        if deal_config['take_distance_mode'] == 'far_level_price':
+            
+            if deal_config['take_offset_mode'] == 'dist_percentage':
+                
+                adjustment = (levels_ahead[0].high - float(last_candle.Close)) * deal_config['take_offset_modes']['dist_percentage'] / 100
+                
+                # print(f'{adjustment=}')
+                
+                return levels_ahead[0].high - adjustment
+    
+    
 
 
-def take_price() -> list:
-    pass
+def get_stop_price(bot, chat_id, levels: list, last_candle: object, deal_config: dict, broken_level_type: str) -> float:
+    
+    if broken_level_type is Support:
+        levels_behind = list(filter(lambda level: level.low > float(last_candle.Close) and level.density >= deal_config['considering_level_density'], levels))
+        levels_behind = sorted(levels_behind, key=lambda level: level.high, reverse=False)
+        # print_levels(levels_behind)
+        
+        if deal_config['stop_distance_mode'] == 'far_level_price':
+            
+            if deal_config['stop_offset_mode'] == 'dist_percentage':
+                
+                adjustment = abs(float(last_candle.Close) - levels_behind[0].high) * deal_config['stop_offset_modes']['dist_percentage'] / 100
+                
+                # print(f'{adjustment=}')
+                
+                return levels_behind[0].high - adjustment
+            
+    elif broken_level_type is Resistance:
+        levels_behind = list(filter(lambda level: level.high < float(last_candle.Close) and level.density >= deal_config['considering_level_density'], levels))
+        levels_behind = sorted(levels_behind, key=lambda level: level.low, reverse=True)
+        # print_levels(levels_behind)
+        
+        if deal_config['stop_distance_mode'] == 'far_level_price':
+            
+            if deal_config['stop_offset_mode'] == 'dist_percentage':
+                
+                adjustment = abs(float(last_candle.Close) - levels_behind[0].low) * deal_config['stop_offset_modes']['dist_percentage'] / 100
+                
+                # print(f'{adjustment=}')
+                
+                return levels_behind[0].low + adjustment
+    
+    
 
 
     
