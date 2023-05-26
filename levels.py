@@ -324,6 +324,9 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             print(f'{take_price=}')
             print(f'{stop_price=}')
             
+            profit_loss_ratio = get_profit_loss_ratio(take_price, stop_price, float(last_candle.Close), 0.08, 10)
+            print(f'{profit_loss_ratio=}')
+            
         elif float(last_candle.Open) < level.high and float(last_candle.Close) > level.high  and level.__class__ is Resistance:
             message = f'Last candle: O {last_candle.Open}, С {last_candle.Close}'
             print(message)
@@ -338,7 +341,20 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             
             print(f'{take_price=}')
             print(f'{stop_price=}')
+    
+            profit_loss_ratio = get_profit_loss_ratio(take_price, stop_price, float(last_candle.Close), 0.08, 10)
+            print(f'{profit_loss_ratio=}')
+
+def get_profit_loss_ratio(take_price: float, stop_price: float, last_candle_close: float, comission_percent: float, leverage: int) -> float:
+    
+    take_distance = abs(last_candle_close - take_price)
+    stop_distance = abs(last_candle_close - stop_price)
+    
+    profit_loss_ratio = (take_distance - take_distance * comission_percent / 100 * leverage) / (stop_distance + stop_distance * comission_percent / 100 * leverage)
+    print(f'Profit/loss without comission: {take_distance / stop_distance}')
         
+    return profit_loss_ratio
+
 
 def get_take_price(bot, chat_id, levels: list, last_candle: object, deal_config: dict, broken_level_type: str) -> float:
     
