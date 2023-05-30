@@ -52,7 +52,24 @@ def check_pair(bot, chat_id, pair: str):
     
     # lv.print_levels(levels)
     
-    lv.check_deal(bot, chat_id, levels, last_candle, deal_config, trading_timeframe)
+    deal = lv.check_deal(bot, chat_id, levels, last_candle, deal_config, trading_timeframe)
+    print(f'{deal=}')
+    
+    if deal != None:
+        deal_message = f"""
+        Найдена сделка:
+        
+        Пара: {pair}
+        Таймфрейм: {deal.timeframe}
+        Цена входа: {deal.entry_price}
+        Тейк: {deal.take_price}
+        Стоп: {deal.stop_price}
+        Профит-лосс: {deal.profit_loss_ratio}
+        Движение цены до тейка: {deal.take_distance_percentage}%
+        Движение цены до стопа: {deal.stop_distance_percentage}%
+        """
+    
+        bot.send_message(chat_id, text = deal_message)
     
 chat_id = 234637822
 
@@ -67,12 +84,12 @@ def start(message, res=False):
 
 def main_func(trading_pairs: list):
     print(datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S'))
-    bot.send_message(chat_id, text=datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S'))
+    bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}")
     for pair in trading_pairs:
         print(f'\nPair {pair}')
         check_pair(bot, chat_id, pair)
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
-    bot.send_message(chat_id, text=f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
+    # bot.send_message(chat_id, text=f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
     
 
 
