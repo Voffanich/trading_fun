@@ -4,6 +4,8 @@ from datetime import datetime
 
 import pandas as pd
 
+import bot_funcs as bf
+
 
 @dataclass
 class Resistance():
@@ -53,6 +55,7 @@ class Deal():
     timestamp: str
     profit_loss_ratio: float    
     leverage: int
+    direction: str
     take_distance_percentage: float
     stop_distance_percentage: float
     pair: str = ''
@@ -343,7 +346,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             if profit_loss_ratio >= deal_config['profit_loss_ratio']:
                 return Deal(timeframe=trading_timeframe, entry_price=last_candle_close, take_price=take_price, stop_price=stop_price, timestamp=datetime.now(), 
                             profit_loss_ratio=profit_loss_ratio, take_distance_percentage=take_distance_percentage, stop_distance_percentage=stop_distance_percentage,
-                            leverage=10) 
+                            leverage=10, direction='Short') 
             
         elif last_candle_open < level.high and last_candle_close > level.high  and level.__class__ is Resistance:
             message = f'Last candle: O {last_candle_open}, С {last_candle_close}'
@@ -366,10 +369,12 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             take_distance_percentage: float = round(abs(take_price - last_candle_close) / last_candle_close * 100, 2)
             stop_distance_percentage: float = round(abs(stop_price - last_candle_close) / last_candle_close * 100, 2)
             
+            direction = "Long" if take_price - stop_price > 0 else 'Short'
+            
             if profit_loss_ratio >= deal_config['profit_loss_ratio']:
                 return Deal(timeframe=trading_timeframe, entry_price=last_candle_close, take_price=take_price, stop_price=stop_price, timestamp=datetime.now(), 
                             profit_loss_ratio=profit_loss_ratio, take_distance_percentage=take_distance_percentage, stop_distance_percentage=stop_distance_percentage,
-                            leverage=10) 
+                            leverage=10, direction=direction) 
 
 
 def get_profit_loss_ratio(take_price: float, stop_price: float, last_candle_close: float, comission_percent: float, leverage: int) -> float:

@@ -12,9 +12,11 @@ from telebot import types
 
 import bot_funcs as bf
 import levels as lv
+from db_funcs import db
 from user_data.credentials import apikey
 
 bot = telebot.TeleBot(apikey)
+db.setup()
 
 config = bf.load_config()
 
@@ -56,14 +58,20 @@ def check_pair(bot, chat_id, pair: str):
     print(f'{deal=}')
     
     if deal != None:
+        
+        deal.pair = pair
+        
+        db.add_deal(deal)
+        
         deal_message = f"""
         Найдена сделка:
         
-        Пара: {pair}
+        Пара: {deal.pair}
         Таймфрейм: {deal.timeframe}
-        Цена входа: {deal.entry_price}
-        Тейк: {deal.take_price}
-        Стоп: {deal.stop_price}
+        Направление: {deal.direction}
+        Цена входа: {bf.r_signif(deal.entry_price, 4)}
+        Тейк: {bf.r_signif(deal.take_price, 4)}
+        Стоп: {bf.r_signif(deal.stop_price, 4)}
         Профит-лосс: {deal.profit_loss_ratio}
         Движение цены до тейка: {deal.take_distance_percentage}%
         Движение цены до стопа: {deal.stop_distance_percentage}%
