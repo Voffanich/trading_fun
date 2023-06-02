@@ -23,11 +23,12 @@ If the market situation meets needed conditions bot sends message to telegram us
     - [X] add to config file desired parameters for deal making
 - [X] function running checks through determined trading pair list
 - [X] function writing deal with its parameters to database
-- [] function checking each deal for win or loss after every candle closes
-    - [] check win
-    - [] check loss
-    - [] write best and worst price if deal haven't won or lost
-    - [] changing status of a deal depending on result
+- [ ] function checking each deal for win or loss after every candle closes
+    - [X] get the list of active deals
+    - [X] check win
+    - [X] check loss
+    - [X] write best and worst price if deal haven't won or lost
+    - [ ] changing status of a deal depending on result
 
 ## IDEAS
 

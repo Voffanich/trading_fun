@@ -19,6 +19,7 @@ bot = telebot.TeleBot(apikey)
 db.setup()
 
 config = bf.load_config()
+chat_id = 234637822
 
 pair = "ETHUSDT" # Trading pair
 # pair = "API3USDT" # Trading pair
@@ -43,7 +44,7 @@ def check_pair(bot, chat_id, pair: str):
             last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
         levels += lv.find_levels(df, timeframe)
         # time.sleep(0.5)
-        
+                
     levels = lv.assign_level_density(levels, checked_timeframes, config['levels'])
 
     levels = lv.optimize_levels(levels, checked_timeframes) # delete broken levels of the basic timeframe
@@ -73,15 +74,22 @@ def check_pair(bot, chat_id, pair: str):
         Тейк: {bf.r_signif(deal.take_price, 4)}
         Стоп: {bf.r_signif(deal.stop_price, 4)}
         Профит-лосс: {deal.profit_loss_ratio}
-        Движение цены до тейка: {deal.take_distance_percentage}%
-        Движение цены до стопа: {deal.stop_distance_percentage}%
+        Дистанция до тейка: {deal.take_distance_percentage}%
+        Дистанция до стопа: {deal.stop_distance_percentage}%
         """
     
         bot.send_message(chat_id, text = deal_message)
+        
+    # get active deals from database    
+    active_deals = db.read_active_deals(pair)
     
-chat_id = 234637822
+    #check and update active deals for result or best/worst price
+    bf.update_active_deals(bot, chat_id, active_deals, last_candle)    
+
 
 # check_pair(pair)
+
+
 @bot.message_handler(commands=['start'])
 def start(message, res=False):
     bot.send_message(message.chat.id, text="Привет, бро!")

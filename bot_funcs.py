@@ -5,6 +5,8 @@ import pandas as pd
 import requests
 import schedule
 
+from db_funcs import db
+
 
 def load_config() -> dict:
     with open('config.json') as config_file:
@@ -94,3 +96,87 @@ def r_signif(number: float, precision: int) -> float:
                 break
     
     return round(number, zero_counter + precision)
+
+def update_active_deals(bot: object, chat_id: int, active_deals: list[object], last_candle: object):
+    
+    last_candle_high = float(last_candle.High)
+    last_candle_low = float(last_candle.Low)
+    
+    for deal in active_deals:
+        if deal.direction == 'long':
+            if last_candle_high > deal.take_price:
+                db.update_deal_data('status', 'win', deal.deal_id)
+                send_win_message(bot, chat_id, deal)
+                print(f'Deal id={deal.deal_id}, {deal.pair}, {deal.direction} won')
+                
+            elif last_candle_low < deal.stop_price:
+                db.update_deal_data('status', 'loss', deal.deal_id)
+                send_loss_message(bot, chat_id, deal)
+                print(f'Deal id={deal.deal_id}, {deal.pair}, {deal.direction} lost')
+                
+            elif last_candle_high > deal.best_price:
+                db.update_deal_data('best_price', last_candle_high, deal.deal_id)
+                print('Best price updated')
+                
+            elif last_candle_low < deal.worst_price:
+                db.update_deal_data('worst_price', last_candle_low, deal.deal_id)
+                print('Worst price updated')
+                
+        elif deal.direction == 'short':
+            if last_candle_low < deal.take_price:
+                db.update_deal_data('status', 'win', deal.deal_id)
+                send_win_message(bot, chat_id, deal)
+                print(f'Deal id={deal.deal_id}, {deal.pair}, {deal.direction} won')
+                
+            elif last_candle_high > deal.stop_price:
+                db.update_deal_data('status', 'loss', deal.deal_id)
+                send_loss_message(bot, chat_id, deal)
+                print(f'Deal id={deal.deal_id}, {deal.pair}, {deal.direction} lost')
+                
+            elif last_candle_low < deal.best_price:
+                db.update_deal_data('best_price', last_candle_low, deal.deal_id)
+                print('Best price updated')
+                
+            elif last_candle_high > deal.worst_price:
+                db.update_deal_data('worst_price', last_candle_high, deal.deal_id)
+                print('Worst price updated')
+            
+        else:
+            print('Direction of the deal is not specified!')
+            
+
+def send_win_message(bot, chat_id, deal):
+    
+    message = f"""
+    <b>Сделка достигла тейка! Прибыль {deal.take_distance_percentage}%</b>
+    
+    Пара: {deal.pair}
+    Таймфрейм: {deal.timeframe}
+    Направление: {deal.direction}
+    Цена входа: {deal.entry_price}
+    Тейк: {deal.take_price}
+    Стоп: {deal.stop_price}
+    Профит-лосс: {deal.profit_loss_ratio}
+    Дистанция до тейка: {deal.take_distance_percentage}%
+    Дистанция до стопа: {deal.stop_distance_percentage}%
+    """
+    
+    bot.send_message(chat_id, text=message, parse_mode = 'HTML')
+    
+def send_loss_message(bot, chat_id, deal):
+    
+    message = f"""
+    <b>Сделка достигла стопа! Убыток {deal.stop_distance_percentage}%</b>
+    
+    Пара: {deal.pair}
+    Таймфрейм: {deal.timeframe}
+    Направление: {deal.direction}
+    Цена входа: {deal.entry_price}
+    Тейк: {deal.take_price}
+    Стоп: {deal.stop_price}
+    Профит-лосс: {deal.profit_loss_ratio}
+    Дистанция до тейка: {deal.take_distance_percentage}%
+    Дистанция до стопа: {deal.stop_distance_percentage}%
+    """
+    
+    bot.send_message(chat_id, text=message, parse_mode = 'HTML')

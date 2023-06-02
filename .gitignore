@@ -132,3 +132,6 @@ dmypy.json
 .pyre/
 
 /user_data
+
+sql_queries.sql
+test.py

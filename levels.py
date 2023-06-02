@@ -48,6 +48,7 @@ class Level():
         
 @dataclass
 class Deal():
+    
     timeframe: str
     entry_price: float
     take_price: float
@@ -58,8 +59,13 @@ class Deal():
     direction: str
     take_distance_percentage: float
     stop_distance_percentage: float
+    status: str
+    best_price: float = 0
+    worst_price: float = 0
+    indicators: str = ''    # Format for indicators is as next INDICATOR1:VALUE;INDICATOR2:VALUE
+    deal_id: int = 0
     pair: str = ''
-    pass
+    
 
     
 def find_levels(candles: pd.DataFrame, timeframe: str) -> list:
@@ -346,7 +352,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             if profit_loss_ratio >= deal_config['profit_loss_ratio']:
                 return Deal(timeframe=trading_timeframe, entry_price=last_candle_close, take_price=take_price, stop_price=stop_price, timestamp=datetime.now(), 
                             profit_loss_ratio=profit_loss_ratio, take_distance_percentage=take_distance_percentage, stop_distance_percentage=stop_distance_percentage,
-                            leverage=10, direction='Short') 
+                            leverage=10, direction='short', status='active') 
             
         elif last_candle_open < level.high and last_candle_close > level.high  and level.__class__ is Resistance:
             message = f'Last candle: O {last_candle_open}, С {last_candle_close}'
@@ -369,12 +375,10 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             take_distance_percentage: float = round(abs(take_price - last_candle_close) / last_candle_close * 100, 2)
             stop_distance_percentage: float = round(abs(stop_price - last_candle_close) / last_candle_close * 100, 2)
             
-            direction = "Long" if take_price - stop_price > 0 else 'Short'
-            
             if profit_loss_ratio >= deal_config['profit_loss_ratio']:
                 return Deal(timeframe=trading_timeframe, entry_price=last_candle_close, take_price=take_price, stop_price=stop_price, timestamp=datetime.now(), 
                             profit_loss_ratio=profit_loss_ratio, take_distance_percentage=take_distance_percentage, stop_distance_percentage=stop_distance_percentage,
-                            leverage=10, direction=direction) 
+                            leverage=10, direction='long', status='active') 
 
 
 def get_profit_loss_ratio(take_price: float, stop_price: float, last_candle_close: float, comission_percent: float, leverage: int) -> float:
@@ -394,37 +398,45 @@ def get_take_price(bot, chat_id, levels: list, last_candle: object, deal_config:
         levels_ahead = list(filter(lambda level: level.high < float(last_candle.Close) and level.density >= deal_config['considering_level_density'], levels))
         levels_ahead = sorted(levels_ahead, key=lambda level: level.high, reverse=True)
         
-        print('Levels ahead:')
-        print_levels(levels_ahead)
+        if levels_ahead:
         
-        if deal_config['take_distance_mode'] == 'far_level_price':
+            print('Levels ahead:')
+            print_levels(levels_ahead)
             
-            if deal_config['take_offset_mode'] == 'dist_percentage':
+            if deal_config['take_distance_mode'] == 'far_level_price':
                 
-                adjustment = (float(last_candle.Close) - levels_ahead[0].low) * deal_config['take_offset_modes']['dist_percentage'] / 100
-                
-                # print(f'{adjustment=}')
-                
-                return levels_ahead[0].low + adjustment
+                if deal_config['take_offset_mode'] == 'dist_percentage':
+                    
+                    adjustment = (float(last_candle.Close) - levels_ahead[0].low) * deal_config['take_offset_modes']['dist_percentage'] / 100
+                    
+                    # print(f'{adjustment=}')
+                    
+                    return levels_ahead[0].low + adjustment
+        else:
+            print('No levels ahead within declared candles depth')
+            return last_candle.Close * 0.8
         
     elif broken_level.__class__ is Resistance:
         levels_ahead = list(filter(lambda level: level.low > float(last_candle.Close) and level.density >= deal_config['considering_level_density'], levels))
         levels_ahead = sorted(levels_ahead, key=lambda level: level.low)
         
-        print('Levels ahead:')
-        print_levels(levels_ahead)
+        if levels_ahead:
         
-        if deal_config['take_distance_mode'] == 'far_level_price':
+            print('Levels ahead:')
+            print_levels(levels_ahead)
             
-            if deal_config['take_offset_mode'] == 'dist_percentage':
+            if deal_config['take_distance_mode'] == 'far_level_price':
                 
-                adjustment = (levels_ahead[0].high - float(last_candle.Close)) * deal_config['take_offset_modes']['dist_percentage'] / 100
-                
-                # print(f'{adjustment=}')
-                
-                return levels_ahead[0].high - adjustment
-    
-    
+                if deal_config['take_offset_mode'] == 'dist_percentage':
+                    
+                    adjustment = (levels_ahead[0].high - float(last_candle.Close)) * deal_config['take_offset_modes']['dist_percentage'] / 100
+                    
+                    # print(f'{adjustment=}')
+                    
+                    return levels_ahead[0].high - adjustment
+        else:
+            print('No levels ahead within declared candles depth')            
+            return last_candle.Close * 1.2
 
 
 def get_stop_price(bot, chat_id, levels: list, last_candle: object, deal_config: dict, broken_level: object) -> float:
