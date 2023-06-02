@@ -2,6 +2,7 @@ import copy
 import os
 import shutil
 import sqlite3
+import re
 from datetime import datetime as dt
 from datetime import timedelta
 from typing import Dict, List
@@ -103,17 +104,20 @@ class DB_handler():
             return error
     
     def update_deal_data(self, column: str, value, deal_id: int):
-        print(f'{column=}, {value=}, {deal_id=}')
-        query = """
-        UPDATE deals
-        SET status=?
-        WHERE deal_id=?;
-        """    
-        try:    
-           self.cursor.execute(query, (value, deal_id))
-           self.connection.commit()
-        except sqlite3.Error as error:
-            print('SQLite error: ', error)
-            return error   
-
+        if re.fullmatch(r'[a-zA-Z0-9_]*', column):
+            query = f"""
+            UPDATE deals
+            SET {column}=?
+            WHERE deal_id=?;
+            """    
+            try:    
+                self.cursor.execute(query, (value, deal_id))
+                self.connection.commit()
+            except sqlite3.Error as error:
+                print('SQLite error: ', error)
+                return error   
+        else:
+            return 'Don\'t you dare sending me anything except latin letters, figures and underscores!'
+        
+        
 db = DB_handler()

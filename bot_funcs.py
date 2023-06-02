@@ -32,37 +32,42 @@ def define_checked_timeframes(used_timeframes: list, timeframe: str) -> list:
         
 def set_schedule(timeframe: str, task, trading_pairs: list):
     print(f'Waiting for the beginning of the {timeframe} timeframe period...\n')
+    
+    #running every minute tasks
+        
+    schedule.every().minute.at(":10").do(task, trading_pairs, True)
+       
     if timeframe == "1m":
-        schedule.every().minute.at(":05").do(task, trading_pairs)
+        schedule.every().minute.at(":05").do(task, trading_pairs, False)
     elif timeframe == "5m":
-        schedule.every().hour.at("00:05").do(task, trading_pairs)
-        schedule.every().hour.at("05:05").do(task, trading_pairs)
-        schedule.every().hour.at("10:05").do(task, trading_pairs)
-        schedule.every().hour.at("15:05").do(task, trading_pairs)
-        schedule.every().hour.at("20:05").do(task, trading_pairs)
-        schedule.every().hour.at("25:05").do(task, trading_pairs)
-        schedule.every().hour.at("30:05").do(task, trading_pairs)
-        schedule.every().hour.at("35:05").do(task, trading_pairs)
-        schedule.every().hour.at("40:05").do(task, trading_pairs)
-        schedule.every().hour.at("45:05").do(task, trading_pairs)
-        schedule.every().hour.at("50:05").do(task, trading_pairs)
-        schedule.every().hour.at("55:05").do(task, trading_pairs)
+        schedule.every().hour.at("00:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("05:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("10:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("15:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("20:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("25:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("30:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("35:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("40:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("45:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("50:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("55:05").do(task, trading_pairs, False) 
     elif timeframe == "15m":
-        schedule.every().hour.at("00:05").do(task, trading_pairs)
-        schedule.every().hour.at("15:05").do(task, trading_pairs)
-        schedule.every().hour.at("30:05").do(task, trading_pairs)
-        schedule.every().hour.at("45:05").do(task, trading_pairs)
+        schedule.every().hour.at("00:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("15:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("30:05").do(task, trading_pairs, False)
+        schedule.every().hour.at("45:05").do(task, trading_pairs, False)
     elif timeframe == "1h":
-        schedule.every().hour.at("00:05").do(task, trading_pairs)
+        schedule.every().hour.at("00:05").do(task, trading_pairs, False)
     elif timeframe == "4h":
-        schedule.every().day.at("00:00:05").do(task, trading_pairs)
-        schedule.every().day.at("04:00:05").do(task, trading_pairs)
-        schedule.every().day.at("08:00:05").do(task, trading_pairs)
-        schedule.every().day.at("12:00:05").do(task, trading_pairs)
-        schedule.every().day.at("16:00:05").do(task, trading_pairs)
-        schedule.every().day.at("20:00:05").do(task, trading_pairs)
+        schedule.every().day.at("00:00:05").do(task, trading_pairs, False)
+        schedule.every().day.at("04:00:05").do(task, trading_pairs, False)
+        schedule.every().day.at("08:00:05").do(task, trading_pairs, False)
+        schedule.every().day.at("12:00:05").do(task, trading_pairs, False)
+        schedule.every().day.at("16:00:05").do(task, trading_pairs, False)
+        schedule.every().day.at("20:00:05").do(task, trading_pairs, False)
     elif timeframe == "1d":
-        schedule.every().day.at("00:00:05").do(task, trading_pairs)
+        schedule.every().day.at("00:00:05").do(task, trading_pairs, False)
     else:
         print("Invalid time period string")
     

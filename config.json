@@ -1,7 +1,7 @@
 {
     "general":{
         "db_file_name": "bot.sqlite",
-        "trading_timeframe": "1m",
+        "trading_timeframe": "5m",
         "timeframes_used": ["1m", "5m", "1h", "1d"],
         "all_timeframes": ["1m", "5m", "1h", "4h", "1d", "1w", "1M"],
         "basic_candle_depths": [400, 250, 200, 100, 100, 55, 24],
@@ -45,7 +45,7 @@
         "stop_offset_modes": {"dist_percentage": 5, "lower_atr_x" : 1, "level_percentage": 10},
         "take_offset_modes": {"dist_percentage": 5, "lower_atr_x" : 1, "level_percentage": 10},
         "considering_level_density": 1,
-        "profit_loss_ratio": 1,
+        "profit_loss_ratio": 1.8,
         "take_distance_threshold": 1.0,
         "stop_distance_threshold": 0.5,
         "deal_amount_of_bank": 0.03,
