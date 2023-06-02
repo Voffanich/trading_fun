@@ -16,16 +16,22 @@ If the market situation meets needed conditions bot sends message to telegram us
 - [X] fucntion assigning density property to levels
 - [X] function running candle check after the next candle closes
 - [X] function checking closed candle to break through support or resistance level
-- [ ] function finding distance to stop loss based on stop loss determining mode
-- [ ] function finding distance to take profit based on take profit determining mode  
-- [ ] function checking the possibility to make deal based on market situation and money and risk management
-- [ ] function offering deal parameters (amount, stop-loss and take levels, leverage etc.) if the market situation meets conditions
-    - [ ] add to config file desired parameters for deal making
-- [ ] function running checks through determined trading pair list
+- [X] function finding distance to stop loss based on stop loss determining mode
+- [X] function finding distance to take profit based on take profit determining mode  
+- [X] function checking the possibility to make deal based on market situation and money and risk management
+- [X] function offering deal parameters (amount, stop-loss and take levels, leverage etc.) if the market situation meets conditions
+    - [X] add to config file desired parameters for deal making
+- [X] function running checks through determined trading pair list
+- [X] function writing deal with its parameters to database
+- [] function checking each deal for win or loss after every candle closes
+    - [] check win
+    - [] check loss
+    - [] write best and worst price if deal haven't won or lost
+    - [] changing status of a deal depending on result
 
 ## IDEAS
 
-- Different candle depth for different timeframes?
+- [X] Different candle depth for different timeframes?
 - Store previous candle data and update only new candles or request all candle data each time?
 - Check level for each timeframe only after new candle closes?
 - Historical backtesting 
