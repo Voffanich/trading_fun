@@ -111,11 +111,13 @@ def update_active_deals(bot: object, chat_id: int, active_deals: list[object], l
         if deal.direction == 'long':
             if last_candle_high > deal.take_price:
                 db.update_deal_data('status', 'win', deal.deal_id)
+                db.update_deal_data('best_price', last_candle_high, deal.deal_id)
                 send_win_message(bot, chat_id, deal)
                 print(f'Deal id={deal.deal_id}, {deal.pair}, {deal.direction} won')
                 
             elif last_candle_low < deal.stop_price:
                 db.update_deal_data('status', 'loss', deal.deal_id)
+                db.update_deal_data('worst_price', last_candle_low, deal.deal_id)
                 send_loss_message(bot, chat_id, deal)
                 print(f'Deal id={deal.deal_id}, {deal.pair}, {deal.direction} lost')
                 
@@ -130,11 +132,13 @@ def update_active_deals(bot: object, chat_id: int, active_deals: list[object], l
         elif deal.direction == 'short':
             if last_candle_low < deal.take_price:
                 db.update_deal_data('status', 'win', deal.deal_id)
+                db.update_deal_data('best_price', last_candle_low, deal.deal_id)
                 send_win_message(bot, chat_id, deal)
                 print(f'Deal id={deal.deal_id}, {deal.pair}, {deal.direction} won')
                 
             elif last_candle_high > deal.stop_price:
                 db.update_deal_data('status', 'loss', deal.deal_id)
+                db.update_deal_data('worst_price', last_candle_high, deal.deal_id)
                 send_loss_message(bot, chat_id, deal)
                 print(f'Deal id={deal.deal_id}, {deal.pair}, {deal.direction} lost')
                 

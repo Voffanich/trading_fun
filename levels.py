@@ -348,6 +348,8 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             
             take_distance_percentage: float = round(abs(take_price - last_candle_close) / last_candle_close * 100, 2)
             stop_distance_percentage: float = round(abs(stop_price - last_candle_close) / last_candle_close * 100, 2)
+            print(f'{take_distance_percentage=}')
+            print(f'{stop_distance_percentage=}')
             
             if profit_loss_ratio >= deal_config['profit_loss_ratio'] and stop_distance_percentage >= deal_config['stop_distance_threshold']:
                 return Deal(timeframe=trading_timeframe, entry_price=last_candle_close, take_price=take_price, stop_price=stop_price, timestamp=datetime.now(), 
@@ -374,6 +376,9 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             
             take_distance_percentage: float = round(abs(take_price - last_candle_close) / last_candle_close * 100, 2)
             stop_distance_percentage: float = round(abs(stop_price - last_candle_close) / last_candle_close * 100, 2)
+            print(f'{take_distance_percentage=}')
+            print(f'{stop_distance_percentage=}')
+            
             
             if profit_loss_ratio >= deal_config['profit_loss_ratio']  and stop_distance_percentage >= deal_config['stop_distance_threshold']:
                 return Deal(timeframe=trading_timeframe, entry_price=last_candle_close, take_price=take_price, stop_price=stop_price, timestamp=datetime.now(), 
