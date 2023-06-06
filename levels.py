@@ -419,7 +419,7 @@ def get_take_price(bot, chat_id, levels: list, last_candle: object, deal_config:
                     return levels_ahead[0].low + adjustment
         else:
             print('No levels ahead within declared candles depth')
-            return last_candle.Close * 0.8
+            return float(last_candle.Close) * 0.8
         
     elif broken_level.__class__ is Resistance:
         levels_ahead = list(filter(lambda level: level.low > float(last_candle.Close) and level.density >= deal_config['considering_level_density'], levels))
@@ -441,7 +441,7 @@ def get_take_price(bot, chat_id, levels: list, last_candle: object, deal_config:
                     return levels_ahead[0].high - adjustment
         else:
             print('No levels ahead within declared candles depth')            
-            return last_candle.Close * 1.2
+            return float(last_candle.Close) * 1.2
 
 
 def get_stop_price(bot, chat_id, levels: list, last_candle: object, deal_config: dict, broken_level: object) -> float:

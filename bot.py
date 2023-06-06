@@ -85,7 +85,7 @@ def check_pair(bot, chat_id, pair: str, minute_flag: bool):
             
     if minute_flag:
         
-        df = bf.get_ohlcv_data_binance(pair, '1m', limit=3)
+        df = bf.get_ohlcv_data_binance(pair, '1m', limit=2)
         last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
         
         # get active deals from database    
@@ -94,6 +94,8 @@ def check_pair(bot, chat_id, pair: str, minute_flag: bool):
         bf.update_active_deals(bot, chat_id, active_deals, last_candle)  
       
 
+def check_active_deals(bot, chat_id):
+    pass
 
 # check_pair(pair)
 
@@ -123,7 +125,6 @@ def main_func(trading_pairs: list, minute_flag: bool):
     
 
 # set_schedule(timeframe)
-
 # while True:
 #     schedule.run_pending()
 #     time.sleep(1)

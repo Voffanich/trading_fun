@@ -9,6 +9,9 @@
         "trading_pairs": [
             "BTCUSDT",
             "ETHUSDT",
+            "TRXUSDT",
+            "LUNCUSDT",
+            "ARBUSDT",
             "BNBUSDT",
             "LTCUSDT",
             "ADAUSDT",
@@ -26,7 +29,14 @@
             "NEARUSDT",
             "SUSHIUSDT",
             "ATOMUSDT",
-            "GALAUSDT"
+            "GALAUSDT",
+            "LINAUSDT",
+            "SUIUSDT",
+            "LUNAUSDT",
+            "FILUSDT",
+            "EDUUSDT",
+            "PEPEUSDT",
+            "JOEUSDT"
         ]
     },    
     "levels":{

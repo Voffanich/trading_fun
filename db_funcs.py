@@ -1,8 +1,8 @@
 import copy
 import os
+import re
 import shutil
 import sqlite3
-import re
 from datetime import datetime as dt
 from datetime import timedelta
 from typing import Dict, List

@@ -31,6 +31,8 @@ If the market situation meets needed conditions bot sends message to telegram us
     - [Х] changing status of a deal depending on result
     - [ ] check only active deal (separate function)
 
+- [ ] strategy setup to separate file so strategy could be defined through config
+
 ## IDEAS
 
 - [X] Different candle depth for different timeframes?
