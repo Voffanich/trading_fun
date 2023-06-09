@@ -2,6 +2,7 @@ import json
 import time
 
 import pandas as pd
+from datetime import datetime as dt
 import requests
 import schedule
 
@@ -16,7 +17,14 @@ def get_ohlcv_data_binance(pair: str, timeframe: str, limit: int = 100) -> pd.Da
         
     url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval={timeframe}&limit={limit}"
 
-    response = requests.get(url)
+    
+    try:
+        response = requests.get(url)
+    except ConnectionError as error:
+        print('Connection error: ', error)
+    except:
+        print('Some another error with getting the responce from Binance')
+        
     data = response.json()
 
     ohlcv_data = [] # Only open time, open, high, low, close, volume data from response
@@ -171,6 +179,8 @@ def send_win_message(bot, chat_id, deal):
     message = f"""
     <b>Сделка достигла тейка! Прибыль {deal.take_distance_percentage}%</b>
     
+    ID: {deal.deal_id}
+    Дата входа: {deal.timestamp}
     Пара: {deal.pair}
     Таймфрейм: {deal.timeframe}
     Направление: {deal.direction}
@@ -189,6 +199,8 @@ def send_loss_message(bot, chat_id, deal):
     message = f"""
     <b>Сделка достигла стопа! Убыток {deal.stop_distance_percentage}%</b>
     
+    ID: {deal.deal_id}
+    Дата входа: {deal.timestamp}
     Пара: {deal.pair}
     Таймфрейм: {deal.timeframe}
     Направление: {deal.direction}

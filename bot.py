@@ -61,6 +61,9 @@ def check_pair(bot, chat_id, pair: str, minute_flag: bool):
         deal = lv.check_deal(bot, chat_id, levels, last_candle, deal_config, trading_timeframe)
         print(f'{deal=}')
         
+        if deal:
+            print('\n')
+        
         if deal != None:
             
             deal.pair = pair
@@ -117,7 +120,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
         bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}")   
     
     for pair in trading_pairs:
-        print(f'\nPair {pair}')
+        print(f'Pair {pair}')
         check_pair(bot, chat_id, pair, minute_flag)
     
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
