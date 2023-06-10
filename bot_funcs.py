@@ -20,20 +20,22 @@ def get_ohlcv_data_binance(pair: str, timeframe: str, limit: int = 100) -> pd.Da
     
     try:
         response = requests.get(url)
+        data = response.json()
+        
+        ohlcv_data = [] # Only open time, open, high, low, close, volume data from response
+        for candle in data:
+            ohlcv = candle[0:6] # Open Time, Open, High, Low, Close, Volume
+            ohlcv_data.append(ohlcv)
+   
+        return pd.DataFrame(ohlcv_data, columns=["O_time", "Open", "High", "Low", "Close", "Volume"])
+
     except ConnectionError as error:
         print('Connection error: ', error)
     except:
         print('Some another error with getting the responce from Binance')
         
-    data = response.json()
-
-    ohlcv_data = [] # Only open time, open, high, low, close, volume data from response
-    for candle in data:
-        ohlcv = candle[0:6] # Open Time, Open, High, Low, Close, Volume
-        ohlcv_data.append(ohlcv)
-   
-    return pd.DataFrame(ohlcv_data, columns=["O_time", "Open", "High", "Low", "Close", "Volume"])
-
+    
+    
 def define_checked_timeframes(used_timeframes: list, timeframe: str) -> list:
     del used_timeframes[0:used_timeframes.index(timeframe)]
     return used_timeframes
