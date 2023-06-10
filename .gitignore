@@ -133,5 +133,4 @@ dmypy.json
 
 /user_data
 
-sql_queries.sql
 test.py
