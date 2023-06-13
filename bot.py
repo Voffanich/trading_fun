@@ -80,8 +80,8 @@ def check_pair(bot, chat_id, pair: str, minute_flag: bool):
             Тейк: {bf.r_signif(deal.take_price, 4)}
             Стоп: {bf.r_signif(deal.stop_price, 4)}
             Профит-лосс: {deal.profit_loss_ratio}
-            Дистанция до тейка: {deal.take_distance_percentage}%
-            Дистанция до стопа: {deal.stop_distance_percentage}%
+            Дистанция до тейка: {deal.take_dist_perc}%
+            Дистанция до стопа: {deal.stop_dist_perc}%
             """
         
             bot.send_message(chat_id, text = deal_message)
@@ -121,8 +121,12 @@ def main_func(trading_pairs: list, minute_flag: bool):
     
     for pair in trading_pairs:
         print(f'Pair {pair}')
-        check_pair(bot, chat_id, pair, minute_flag)
-    
+        
+        try:
+            check_pair(bot, chat_id, pair, minute_flag)
+        except:
+            print(f'{bf.timestamp()} - Some fucking error happend')
+        
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
     # bot.send_message(chat_id, text=f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
     

@@ -46,7 +46,7 @@
 --             indicators
 --     FROM deals 
 
--- ALTER TABLE deals RENAME TO deals_olв
+-- ALTER TABLE deals RENAME TO deals_old
 
 -- DELETE FROM deals WHERE best_price IS NULL;
 
@@ -91,5 +91,13 @@ ORDER BY date;
 -- SELECT * FROM deals
 -- WHERE status <> 'active' AND strftime('%Y-%m-%d', datetime) = '2023-06-08';
 
+SELECT pair, count(*) AS deal_quantity,
+  SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
+  SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
+  count(*) - SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) - SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) as active_deals
+FROM deals
+GROUP BY pair;
+
+
 SELECT * FROM deals
-WHERE status <> 'active';
+WHERE status = 'active';

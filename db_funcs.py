@@ -56,8 +56,8 @@ class DB_handler():
         try:
             self.cursor.execute(query, (dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S'), deal.pair, deal.timeframe, deal.direction, 
                                         deal.profit_loss_ratio, deal.entry_price, 
-                                        deal.take_price, deal.stop_price, deal.take_distance_percentage, 
-                                        deal.stop_distance_percentage, deal.best_price, deal.worst_price, deal.status, deal.indicators))
+                                        deal.take_price, deal.stop_price, deal.take_dist_perc, 
+                                        deal.stop_dist_perc, deal.best_price, deal.worst_price, deal.status, deal.indicators))
             self.connection.commit()
         except sqlite3.Error as error:
             print('SQLite error: ', error)
@@ -88,12 +88,17 @@ class DB_handler():
                     entry_price=deal[6],
                     take_price=deal[7],
                     stop_price=deal[8],
-                    take_distance_percentage=deal[9],
-                    stop_distance_percentage=deal[10],
+                    take_dist_perc=deal[9],
+                    stop_dist_perc=deal[10],
                     best_price=deal[11],
                     worst_price=deal[12],
-                    status=deal[13],
-                    indicators=deal[14],
+                    best_price_perc=deal[13],
+                    worst_price_perc=deal[14],
+                    current_price=deal[15],                   
+                    current_price_perc=deal[16],                   
+                    status=deal[17],
+                    finish_time=deal[18],
+                    indicators=deal[19],
                     leverage=10                                        
                 ))
             
