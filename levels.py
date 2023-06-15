@@ -456,37 +456,46 @@ def get_stop_price(bot, chat_id, levels: list, last_candle: object, deal_config:
                                     and level != broken_level, levels))
         levels_behind = sorted(levels_behind, key=lambda level: level.high, reverse=False)
         
-        print('Levels behind:')
-        print_levels(levels_behind)
-        
-        if deal_config['stop_distance_mode'] == 'far_level_price':
+        if levels_behind:
             
-            if deal_config['stop_offset_mode'] == 'dist_percentage':
+            print('Levels behind:')
+            print_levels(levels_behind)
+            
+            if deal_config['stop_distance_mode'] == 'far_level_price':
                 
-                adjustment = abs(float(last_candle.Close) - levels_behind[0].high) * deal_config['stop_offset_modes']['dist_percentage'] / 100
-                
-                # print(f'{adjustment=}')
-                
-                return levels_behind[0].high - adjustment
+                if deal_config['stop_offset_mode'] == 'dist_percentage':
+                    
+                    adjustment = abs(float(last_candle.Close) - levels_behind[0].high) * deal_config['stop_offset_modes']['dist_percentage'] / 100
+                    
+                    # print(f'{adjustment=}')
+                    
+                    return levels_behind[0].high - adjustment
+        else:
+            print('No levels behind within declared candles depth')
+            return float(last_candle.Close) * 1.2
             
     elif broken_level.__class__ is Resistance:
         levels_behind = list(filter(lambda level: level.high < float(last_candle.Close) and level.density >= deal_config['considering_level_density']
                                     and level != broken_level, levels))
         levels_behind = sorted(levels_behind, key=lambda level: level.low, reverse=True)
         
-        print('Levels behind:')
-        print_levels(levels_behind)
+        if levels_behind:
         
-        if deal_config['stop_distance_mode'] == 'far_level_price':
+            print('Levels behind:')
+            print_levels(levels_behind)
             
-            if deal_config['stop_offset_mode'] == 'dist_percentage':
+            if deal_config['stop_distance_mode'] == 'far_level_price':
                 
-                adjustment = abs(float(last_candle.Close) - levels_behind[0].low) * deal_config['stop_offset_modes']['dist_percentage'] / 100
-                
-                # print(f'{adjustment=}')
-                
-                return levels_behind[0].low + adjustment
-    
+                if deal_config['stop_offset_mode'] == 'dist_percentage':
+                    
+                    adjustment = abs(float(last_candle.Close) - levels_behind[0].low) * deal_config['stop_offset_modes']['dist_percentage'] / 100
+                    
+                    # print(f'{adjustment=}')
+                    
+                    return levels_behind[0].low + adjustment
+        else:
+            print('No levels behind within declared candles depth')
+            return float(last_candle.Close) * 0.8
 
     
 def print_levels(levels: list):

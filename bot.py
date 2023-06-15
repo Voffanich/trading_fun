@@ -10,6 +10,7 @@ import schedule
 import telebot
 from telebot import types
 
+import aux_funcs as af
 import bot_funcs as bf
 import levels as lv
 from db_funcs import db
@@ -36,72 +37,54 @@ deal_config = config['deal_config']     # config for deal estimation
    
 
 def check_pair(bot, chat_id, pair: str, minute_flag: bool):
-        
-    if not minute_flag:    
-        
-        levels = []       # list of levels of all checked timeframes at current moment
 
-        for timeframe in checked_timeframes:
-            df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe])
-            if timeframe == trading_timeframe:
-                last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
-            levels += lv.find_levels(df, timeframe)
-        # time.sleep(0.5)
-                
-        levels = lv.assign_level_density(levels, checked_timeframes, config['levels'])
+    levels = []       # list of levels of all checked timeframes at current moment
 
-        levels = lv.optimize_levels(levels, checked_timeframes) # delete broken levels of the basic timeframe
-        
-        # lv.print_levels(levels)
-        
-        levels = lv.merge_timeframe_levels(levels)
-        
-        # lv.print_levels(levels)
+    for timeframe in checked_timeframes:
+        df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe])
+        if timeframe == trading_timeframe:
+            last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
+        levels += lv.find_levels(df, timeframe)
+    # time.sleep(0.5)
+            
+    levels = lv.assign_level_density(levels, checked_timeframes, config['levels'])
+
+    levels = lv.optimize_levels(levels, checked_timeframes) # delete broken levels of the basic timeframe
     
-        deal = lv.check_deal(bot, chat_id, levels, last_candle, deal_config, trading_timeframe)
-        print(f'{deal=}')
+    # lv.print_levels(levels)
+    
+    levels = lv.merge_timeframe_levels(levels)
+    
+    # lv.print_levels(levels)
+
+    deal = lv.check_deal(bot, chat_id, levels, last_candle, deal_config, trading_timeframe)
+    print(f'{deal=}')
+    
+    if deal:
+        print('\n')
+    
+    if deal != None:
         
-        if deal:
-            print('\n')
+        deal.pair = pair
         
-        if deal != None:
-            
-            deal.pair = pair
-            
-            db.add_deal(deal)
-            
-            deal_message = f"""
-            Найдена сделка:
-            
-            Пара: {deal.pair}
-            Таймфрейм: {deal.timeframe}
-            Направление: {deal.direction}
-            Цена входа: {bf.r_signif(deal.entry_price, 4)}
-            Тейк: {bf.r_signif(deal.take_price, 4)}
-            Стоп: {bf.r_signif(deal.stop_price, 4)}
-            Профит-лосс: {deal.profit_loss_ratio}
-            Дистанция до тейка: {deal.take_dist_perc}%
-            Дистанция до стопа: {deal.stop_dist_perc}%
-            """
+        db.add_deal(deal)
         
-            bot.send_message(chat_id, text = deal_message)
-            
-    if minute_flag:
+        deal_message = f"""
+        Найдена сделка:
         
-        df = bf.get_ohlcv_data_binance(pair, '1m', limit=2)
-        last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
-        
-        # get active deals from database    
-        active_deals = db.read_active_deals(pair)
-        #check and update active deals for result or best/worst price
-        bf.update_active_deals(bot, chat_id, active_deals, last_candle)  
+        Пара: {deal.pair}
+        Таймфрейм: {deal.timeframe}
+        Направление: {deal.direction}
+        Цена входа: {af.r_signif(deal.entry_price, 4)}
+        Тейк: {af.r_signif(deal.take_price, 4)}
+        Стоп: {af.r_signif(deal.stop_price, 4)}
+        Профит-лосс: {deal.profit_loss_ratio}
+        Дистанция до тейка: {deal.take_dist_perc}%
+        Дистанция до стопа: {deal.stop_dist_perc}%
+        """
+    
+        bot.send_message(chat_id, text = deal_message)    
       
-
-def check_active_deals(bot, chat_id):
-    pass
-
-# check_pair(pair)
-
 
 @bot.message_handler(commands=['start'])
 def start(message, res=False):
@@ -114,18 +97,25 @@ def start(message, res=False):
 def main_func(trading_pairs: list, minute_flag: bool):
     
     if minute_flag:
-        print(f'Checking active deals at {datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")}')
+        print(f'\nChecking active deals at {datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")}')
     elif not minute_flag:
         print(datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S'))
         bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}")   
     
-    for pair in trading_pairs:
-        print(f'Pair {pair}')
-        
-        try:
-            check_pair(bot, chat_id, pair, minute_flag)
-        except:
-            print(f'{bf.timestamp()} - Some fucking error happend')
+    if not minute_flag:
+        for pair in trading_pairs:
+            print(f'Pair {pair}')
+            
+            try:
+                check_pair(bot, chat_id, pair, minute_flag)
+            except Exception as ex:
+                print(f'{bf.timestamp()} - Some fucking error happened')
+                print(ex)
+                continue
+            
+    elif minute_flag:
+        bf.check_active_deals(bot, chat_id)
+                
         
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
     # bot.send_message(chat_id, text=f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')

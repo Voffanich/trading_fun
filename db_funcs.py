@@ -11,6 +11,7 @@ from xmlrpc.client import Boolean
 import pandas as pd
 import portion as p
 
+import aux_funcs as af
 import levels as lv
 
 
@@ -55,8 +56,8 @@ class DB_handler():
         """
         try:
             self.cursor.execute(query, (dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S'), deal.pair, deal.timeframe, deal.direction, 
-                                        deal.profit_loss_ratio, deal.entry_price, 
-                                        deal.take_price, deal.stop_price, deal.take_dist_perc, 
+                                        deal.profit_loss_ratio, af.r_signif(deal.entry_price, 4), 
+                                        af.r_signif(deal.take_price, 4), af.r_signif(deal.stop_price, 4), deal.take_dist_perc, 
                                         deal.stop_dist_perc, deal.best_price, deal.worst_price, deal.status, deal.indicators))
             self.connection.commit()
         except sqlite3.Error as error:
@@ -123,6 +124,25 @@ class DB_handler():
                 return error   
         else:
             return 'Don\'t you dare sending me anything except latin letters, figures and underscores!'
+
+    def get_active_deals_list(self) -> list:
+        query = """
+        SELECT pair FROM deals
+        WHERE status = 'active'
+        GROUP BY pair;
+        """
+        try:    
+            self.cursor.execute(query)
+            active_deal_pairs = self.cursor.fetchall()
+            self.connection.commit()    
+            
+            active_deals_pair_list = [pair[0] for pair in active_deal_pairs]
+                        
+            return active_deals_pair_list
+                
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
         
         
 db = DB_handler()

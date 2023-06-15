@@ -20,47 +20,47 @@
 --             finish_time TEXT,
 --             indicators TEXT);
 
-INSERT INTO deals (datetime,
-            pair,
-            timeframe,
-            direction,
-            profit_loss,
-            entry_price,
-            take_price,
-            stop_price,
-            take_dist_perc,
-            stop_dist_perc,
-            best_price,
-            worst_price, 
-            best_price_perc,
-            worst_price_perc,
+-- INSERT INTO deals (datetime,
+--             pair,
+--             timeframe,
+--             direction,
+--             profit_loss,
+--             entry_price,
+--             take_price,
+--             stop_price,
+--             take_dist_perc,
+--             stop_dist_perc,
+--             best_price,
+--             worst_price, 
+--             best_price_perc,
+--             worst_price_perc,
                      
-            status,            
-            indicators)
-    SELECT 
-            datetime,
-            pair,
-            timeframe,
-            direction,
-            profit_loss,
-            entry_price,
-            take_price,
-            stop_price,
-            take_dist_perc,
-            stop_dist_perc,
-            best_price,
-            worst_price,
-            ROUND(ABS(best_price - entry_price) / entry_price * 100, 2),
-            ROUND(ABS(worst_price - entry_price) / entry_price * 100, 2),
-            status,
-            indicators
-    FROM deals_old;
+--             status,            
+--             indicators)
+--     SELECT 
+--             datetime,
+--             pair,
+--             timeframe,
+--             direction,
+--             profit_loss,
+--             entry_price,
+--             take_price,
+--             stop_price,
+--             take_dist_perc,
+--             stop_dist_perc,
+--             best_price,
+--             worst_price,
+--             ROUND(ABS(best_price - entry_price) / entry_price * 100, 2),
+--             ROUND(ABS(worst_price - entry_price) / entry_price * 100, 2),
+--             status,
+--             indicators
+--     FROM deals_old;
 
 -- delete from sqlite_sequence where name='deals';
 
 -- DELETE FROM deals;
 
--- DROP TABLE deals_new;
+-- DROP TABLE deals_old;
 
 -- ALTER TABLE deals RENAME TO deals_old;
 -- ALTER TABLE deals_new RENAME TO deals;
@@ -76,3 +76,18 @@ INSERT INTO deals (datetime,
 
 -- SELECT * FROM deals
 -- WHERE status <> 'active';
+
+-- SELECT pair FROM deals
+-- WHERE status = 'active'
+-- GROUP BY pair;
+
+-- UPDATE deals
+-- SET best_price_perc = ROUND(ABS(best_price - entry_price) / entry_price * 100, 2)
+-- WHERE best_price_perc IS NULL;
+
+-- UPDATE deals
+-- SET worst_price_perc = ROUND(ABS(worst_price - entry_price) / entry_price * 100, 2)
+-- WHERE worst_price_perc IS NULL;
+
+SELECT * FROM deals
+WHERE worst_price_perc IS NULL OR best_price_perc IS NULL;
