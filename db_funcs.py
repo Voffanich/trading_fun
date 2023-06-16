@@ -51,14 +51,15 @@ class DB_handler():
     def add_deal(self, deal):
         query = """
         INSERT INTO deals (datetime, pair, timeframe, direction, profit_loss, entry_price, take_price, stop_price, take_dist_perc, 
-        stop_dist_perc, best_price, worst_price, status, indicators)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); 
+        stop_dist_perc, best_price, worst_price, best_price_perc, worst_price_perc, current_price, current_price_perc, status, indicators)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); 
         """
         try:
             self.cursor.execute(query, (dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S'), deal.pair, deal.timeframe, deal.direction, 
                                         deal.profit_loss_ratio, af.r_signif(deal.entry_price, 4), 
                                         af.r_signif(deal.take_price, 4), af.r_signif(deal.stop_price, 4), deal.take_dist_perc, 
-                                        deal.stop_dist_perc, deal.best_price, deal.worst_price, deal.status, deal.indicators))
+                                        deal.stop_dist_perc, deal.best_price, deal.worst_price, deal.best_price_perc, deal.worst_price_perc,
+                                        deal.current_price, deal.current_price_perc, deal.status, deal.indicators))
             self.connection.commit()
         except sqlite3.Error as error:
             print('SQLite error: ', error)

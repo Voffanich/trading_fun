@@ -91,10 +91,11 @@ ORDER BY date;
 -- SELECT * FROM deals
 -- WHERE status <> 'active' AND strftime('%Y-%m-%d', datetime) = '2023-06-08';
 
-SELECT pair, count(*) AS deal_quantity,
+SELECT pair, COUNT(*) AS deal_quantity,
   SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
   SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
-  count(*) - SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) - SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) as active_deals
+  COUNT(*) - SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) - SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS active_deals,
+  ROUND(CAST(SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS REAL) / CAST(SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS REAL), 2) AS lose_win_ratio
 FROM deals
 GROUP BY pair;
 
