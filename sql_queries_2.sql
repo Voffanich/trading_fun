@@ -1,85 +1,4 @@
--- CREATE TABLE IF NOT EXISTS deals_new (
---             deal_id INTEGER PRIMARY KEY AUTOINCREMENT,
---             datetime TEXT NOT NULL,
---             pair TEXT NOT NULL,
---             timeframe TEXT NOT NULL,
---             direction TEXT NOT NULL,
---             profit_loss REAL NOT NULL,
---             entry_price REAL NOT NULL,
---             take_price REAL NOT NULL,
---             stop_price REAL NOT NULL,
---             take_dist_perc REAL NOT NULL,
---             stop_dist_perc REAL NOT NULL,
---             best_price REAL,
---             worst_price REAL,            
---             best_price_perc REAL,
---             worst_price_perc REAL,
---             current_price REAL,
---             current_price_perc REAL,
---             status TEXT NOT NULL,
---             finish_time TEXT,
---             indicators TEXT);
 
--- INSERT INTO deals (datetime,
---             pair,
---             timeframe,
---             direction,
---             profit_loss,
---             entry_price,
---             take_price,
---             stop_price,
---             take_dist_perc,
---             stop_dist_perc,
---             best_price,
---             worst_price, 
---             best_price_perc,
---             worst_price_perc,
-                     
---             status,            
---             indicators)
---     SELECT 
---             datetime,
---             pair,
---             timeframe,
---             direction,
---             profit_loss,
---             entry_price,
---             take_price,
---             stop_price,
---             take_dist_perc,
---             stop_dist_perc,
---             best_price,
---             worst_price,
---             ROUND(ABS(best_price - entry_price) / entry_price * 100, 2),
---             ROUND(ABS(worst_price - entry_price) / entry_price * 100, 2),
---             status,
---             indicators
---     FROM deals_old;
-
--- delete from sqlite_sequence where name='deals';
-
--- DELETE FROM deals;
-
--- DROP TABLE deals_old;
-
--- ALTER TABLE deals RENAME TO deals_old;
--- ALTER TABLE deals_new RENAME TO deals;
-
--- DELETE FROM deals WHERE best_price IS NULL;
-
--- UPDATE deals
--- SET worst_price = 0.9
--- WHERE deal_id = 560;
-
--- SELECT * FROM deals
--- WHERE status = 'active';
-
--- SELECT * FROM deals
--- WHERE status <> 'active';
-
--- SELECT pair FROM deals
--- WHERE status = 'active'
--- GROUP BY pair;
 
 -- UPDATE deals
 -- SET best_price_perc = ROUND(ABS(best_price - entry_price) / entry_price * 100, 2)
@@ -89,5 +8,159 @@
 -- SET worst_price_perc = ROUND(ABS(worst_price - entry_price) / entry_price * 100, 2)
 -- WHERE worst_price_perc IS NULL;
 
-SELECT * FROM deals
-WHERE worst_price_perc IS NULL OR best_price_perc IS NULL;
+-- SELECT * FROM deals
+-- WHERE worst_price_perc IS NULL OR best_price_perc IS NULL;
+
+-- SELECT SUM(2 / profit_loss) as profit, COUNT(*) as profitable_deals, profit / profitable_deals AS average_profit FROM deals
+-- WHERE status = "loss" AND strftime("%Y-%m-%d", datetime) = "2023-06-16"
+
+--## reverse strategy
+
+SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'loss'
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'win' 
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date;
+
+SELECT SUM(day_result) AS total_reverse_strategy from 
+(SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'loss'
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'win'
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date);
+
+SELECT ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) as total_profit FROM deals
+WHERE status = 'loss';
+
+SELECT COUNT(*) * 2 as total_loss FROM deals
+WHERE status = 'win';
+
+-- ## direct strategy
+
+SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * profit_loss), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * profit_loss) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'win' 
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'loss' 
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date;
+
+SELECT SUM(day_result) AS total_direct_strategy from (
+SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * profit_loss), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * profit_loss) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'win'
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'loss' 
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date);
+
+-- ## data for PL > 15
+
+-- SELECT COUNT(*) as PL_bigger_15 FROM deals 
+-- WHERE profit_loss > 15;
+
+-- SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * profit_loss), 3) AS profit, COUNT(*) AS profitable_deals, 
+--     ROUND(SUM(2 * profit_loss) / COUNT(*), 3) AS average_profit FROM deals
+-- WHERE status = 'win' AND profit_loss > 15
+-- GROUP BY date;
+
+-- SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+--     ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+-- WHERE status = 'loss' AND profit_loss > 15
+-- GROUP BY date;
+
+-- SELECT SUM(profit) from (
+-- SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * profit_loss), 3) AS profit, COUNT(*) AS profitable_deals, 
+--     ROUND(SUM(2 * profit_loss) / COUNT(*), 3) AS average_profit FROM deals
+-- WHERE status = 'win' AND profit_loss > 15
+-- GROUP BY date);
+
+-- SELECT SUM(loss) from (
+-- SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+--     ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+-- WHERE status = 'loss' AND profit_loss > 15
+-- GROUP BY date);
+
+-- list of good pairs on 2023-06-30
+--('ATOMUSDT', 'AVAXUSDT', 'BNBUSDT', 'BTCUSDT', 'ETCUSDT', 'ETHUSDT', 'JOEUSDT', 'LUNAUSDT', 'MASKUSDT', 'NEARUSDT', 'PEPEUSDT', 'SOLUSDT', 'TRXUSDT')
+
+-- list of bad pairs on 2023-06-30
+--('ADAUSDT', 'APTUUSDT', 'DOGEUSDT', 'EDUUSDT', 'LINAUSDT', 'SUSHI')
+
+--## reverse strategy with good pairs
+
+SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'loss' AND pair IN ('ATOMUSDT', 'AVAXUSDT', 'BNBUSDT', 'BTCUSDT', 'ETCUSDT', 'ETHUSDT', 'JOEUSDT', 'LUNAUSDT',
+ 'MASKUSDT', 'NEARUSDT', 'PEPEUSDT', 'SOLUSDT', 'TRXUSDT')
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'win' AND pair IN ('ATOMUSDT', 'AVAXUSDT', 'BNBUSDT', 'BTCUSDT', 'ETCUSDT', 'ETHUSDT', 'JOEUSDT', 'LUNAUSDT',
+ 'MASKUSDT', 'NEARUSDT', 'PEPEUSDT', 'SOLUSDT', 'TRXUSDT')
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date;
+
+SELECT SUM(day_result) AS total_reverse_strategy from 
+(SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'loss' AND pair IN ('ATOMUSDT', 'AVAXUSDT', 'BNBUSDT', 'BTCUSDT', 'ETCUSDT', 'ETHUSDT', 'JOEUSDT', 'LUNAUSDT',
+ 'MASKUSDT', 'NEARUSDT', 'PEPEUSDT', 'SOLUSDT', 'TRXUSDT')
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'win' AND pair IN ('ATOMUSDT', 'AVAXUSDT', 'BNBUSDT', 'BTCUSDT', 'ETCUSDT', 'ETHUSDT', 'JOEUSDT', 'LUNAUSDT',
+ 'MASKUSDT', 'NEARUSDT', 'PEPEUSDT', 'SOLUSDT', 'TRXUSDT')
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date);
+
+-- ## direct strategy with good pairs
+
+SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * profit_loss), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * profit_loss) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'win' AND pair IN ('ADAUSDT', 'APTUUSDT', 'DOGEUSDT', 'EDUUSDT', 'LINAUSDT', 'SUSHI')
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'loss' AND pair IN ('ADAUSDT', 'APTUUSDT', 'DOGEUSDT', 'EDUUSDT', 'LINAUSDT', 'SUSHI')
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date;
+
+SELECT SUM(day_result) AS total_direct_strategy from (
+SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * profit_loss), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * profit_loss) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'win' AND pair IN ('ADAUSDT', 'APTUUSDT', 'DOGEUSDT', 'EDUUSDT', 'LINAUSDT', 'SUSHI')
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 2 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 2 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'loss' AND pair IN ('ADAUSDT', 'APTUUSDT', 'DOGEUSDT', 'EDUUSDT', 'LINAUSDT', 'SUSHI')
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date);
