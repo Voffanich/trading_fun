@@ -7,14 +7,13 @@ import requests
 import schedule
 
 import aux_funcs as af
-from db_funcs import db
 
 
 def timestamp() -> str:
     return dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")
 
-def load_config() -> dict:
-    with open('config.json') as config_file:
+def load_config(config_file_name: str) -> dict:
+    with open(config_file_name) as config_file:
         return json.load(config_file)
 
 def get_ohlcv_data_binance(pair: str, timeframe: str, limit: int = 100) -> pd.DataFrame:
@@ -90,19 +89,18 @@ def set_schedule(timeframe: str, task, trading_pairs: list):
         time.sleep(1)
         
 
-def update_current_deal_price(deal: object, current_price: float):
+def update_current_deal_price(db, deal: object, current_price: float):
     
     if deal.direction == 'long':
         current_price_perc = round((current_price - deal.entry_price) / deal.entry_price * 100, 2)
     elif deal.direction == 'short':
         current_price_perc = round((current_price - deal.entry_price) / deal.entry_price * 100, 2) * -1
         
-        
     
     db.update_deal_data('current_price', current_price, deal.deal_id)
     db.update_deal_data('current_price_perc', current_price_perc, deal.deal_id)
     
-def update_best_price(deal: object, best_price: float):
+def update_best_price(db, deal: object, best_price: float):
     
     best_price_perc = abs(round((best_price - deal.entry_price) / deal.entry_price * 100, 2))
     
@@ -110,7 +108,7 @@ def update_best_price(deal: object, best_price: float):
     db.update_deal_data('best_price_perc', best_price_perc, deal.deal_id)
 
 
-def update_worst_price(deal: object, worst_price: float):
+def update_worst_price(db, deal: object, worst_price: float):
     
     worst_price_perc = abs(round((worst_price - deal.entry_price) / deal.entry_price * 100, 2))
     
@@ -118,7 +116,7 @@ def update_worst_price(deal: object, worst_price: float):
     db.update_deal_data('worst_price_perc', worst_price_perc, deal.deal_id)
 
 
-def update_active_deals(bot: object, chat_id: int, active_deals: list[object], last_candle: object):
+def update_active_deals(db, bot: object, chat_id: int, active_deals: list[object], last_candle: object):
     
     last_candle_high = af.r_signif(float(last_candle.High), 4)
     last_candle_low = af.r_signif(float(last_candle.Low), 4)
@@ -126,17 +124,17 @@ def update_active_deals(bot: object, chat_id: int, active_deals: list[object], l
     
     for deal in active_deals:
         
-        update_current_deal_price(deal, last_cande_close)
+        update_current_deal_price(db, deal, last_cande_close)
         
         if deal.direction == 'long':
             
             if last_candle_high > deal.take_price:
                 db.update_deal_data('status', 'win', deal.deal_id)
                 db.update_deal_data('finish_time', timestamp(), deal.deal_id)
-                update_best_price(deal, last_candle_high)
+                update_best_price(db, deal, last_candle_high)
                              
                 if last_candle_low < deal.worst_price:
-                    update_worst_price(deal, last_candle_low)                    
+                    update_worst_price(db, deal, last_candle_low)                    
                     
                 send_win_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Won')
@@ -144,19 +142,19 @@ def update_active_deals(bot: object, chat_id: int, active_deals: list[object], l
             elif last_candle_low < deal.stop_price:
                 db.update_deal_data('status', 'loss', deal.deal_id)
                 db.update_deal_data('finish_time', timestamp(), deal.deal_id)
-                update_worst_price(deal, last_candle_low) 
+                update_worst_price(db, deal, last_candle_low) 
                 if last_candle_high > deal.best_price:
-                    update_best_price(deal, last_candle_high)
+                    update_best_price(db, deal, last_candle_high)
                 
                 send_loss_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Lost')
                 
             elif last_candle_high > deal.best_price:
-                update_best_price(deal, last_candle_high)
+                update_best_price(db, deal, last_candle_high)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Best price updated')
                                 
             elif last_candle_low < deal.worst_price:
-                update_worst_price(deal, last_candle_low) 
+                update_worst_price(db, deal, last_candle_low) 
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Worst price updated')
                               
         elif deal.direction == 'short':
@@ -164,10 +162,10 @@ def update_active_deals(bot: object, chat_id: int, active_deals: list[object], l
             if last_candle_low < deal.take_price:
                 db.update_deal_data('status', 'win', deal.deal_id)
                 db.update_deal_data('finish_time', timestamp(), deal.deal_id)
-                update_best_price(deal, last_candle_low)
+                update_best_price(db, deal, last_candle_low)
                 
                 if last_candle_high > deal.worst_price:
-                    update_worst_price(deal, last_candle_high) 
+                    update_worst_price(db, deal, last_candle_high) 
                 
                 send_win_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Won')
@@ -175,19 +173,19 @@ def update_active_deals(bot: object, chat_id: int, active_deals: list[object], l
             elif last_candle_high > deal.stop_price:
                 db.update_deal_data('status', 'loss', deal.deal_id)
                 db.update_deal_data('finish_time', timestamp(), deal.deal_id)
-                update_worst_price(deal, last_candle_high)
+                update_worst_price(db, deal, last_candle_high)
                 if last_candle_low < deal.best_price:
-                    update_best_price(deal, last_candle_low)
+                    update_best_price(db, deal, last_candle_low)
                 
                 send_loss_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Lost')
                 
             elif last_candle_low < deal.best_price:
-                update_best_price(deal, last_candle_low)
+                update_best_price(db, deal, last_candle_low)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Best price updated')
                             
             elif last_candle_high > deal.worst_price:
-                update_worst_price(deal, last_candle_high)
+                update_worst_price(db, deal, last_candle_high)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Worst price updated')
                            
         else:
@@ -235,17 +233,27 @@ def send_loss_message(bot, chat_id, deal):
     bot.send_message(chat_id, text=message, parse_mode = 'HTML')
     
     
-def check_active_deals(bot, chat_id):
+def check_active_deals(db, bot, chat_id):
     
     active_deal_pairs = db.get_active_deals_list()
     # print(f'{active_deal_pairs=}')
     
+    
     for pair in active_deal_pairs:
-                
-        df = get_ohlcv_data_binance(pair, '1m', limit=2)
-        last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
+        try:    
+            df = get_ohlcv_data_binance(pair, '1m', limit=2)
+            last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
+            
+            # get active deals from database    
+            active_deals = db.read_active_deals(pair)
+            #check and update active deals for result or best/worst price
+            update_active_deals(db, bot, chat_id, active_deals, last_candle)  
+        except Exception as ex:
+            print(f'{timestamp()} - Some fucking error happened')
+            print(ex)
+            continue
+    
         
-        # get active deals from database    
-        active_deals = db.read_active_deals(pair)
-        #check and update active deals for result or best/worst price
-        update_active_deals(bot, chat_id, active_deals, last_candle)  
+def show_finished_stats(deals_dataframe: pd.DataFrame):
+    
+    pass

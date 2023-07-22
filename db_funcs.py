@@ -12,6 +12,7 @@ import pandas as pd
 import portion as p
 
 import aux_funcs as af
+import bot_funcs as bf
 import levels as lv
 
 
@@ -38,7 +39,12 @@ class DB_handler():
             stop_dist_perc REAL NOT NULL,
             best_price REAL,
             worst_price REAL,
+            best_price_perc REAL,
+            worst_price_perc REAL,
+            current_price REAL,
+            current_price_perc REAL,
             status TEXT,
+            finish_time TEXT,
             indicators TEXT);
             """
         try:    
@@ -145,5 +151,61 @@ class DB_handler():
             print('SQLite error: ', error)
             return error
         
+    
+    def get_finised_deals(self, conditions: list) -> pd.DataFrame:
         
-db = DB_handler()
+        if conditions:
+        
+            restrictions = 'WHERE'
+            counter = 0
+        
+        
+            for condition in conditions:
+                if counter > 0:
+                    restrictions += ' AND'
+                
+                restrictions += f' {condition}'
+                counter += 1
+            
+        # print(f'{restrictions=}')
+        
+        query = f"""
+        SELECT * FROM deals
+        {restrictions} AND status <> "active"
+        """
+        
+        # print(f'{query=}')
+        
+        try:    
+            self.cursor.execute(query)
+            finished_deals_df = pd.read_sql(query, self.connection, index_col='deal_id')
+            self.connection.commit()    
+            
+            # print(finished_deals_df)
+            return finished_deals_df
+                
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+        
+    def show_perfomance_stats(self, conditions: list):
+        
+        restrictions = 'WHERE'
+        
+        if conditions:        
+            counter = 0
+        
+            for condition in conditions:
+                if counter > 0:
+                    restrictions += ' AND'
+                
+                restrictions += f' {condition}'
+                counter += 1
+        
+        query = """
+        SELECT * FROM deals
+        {restrictions} AND status <> "active"
+        """
+            
+        # print(f'{restrictions=}')
+        

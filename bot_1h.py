@@ -14,11 +14,11 @@ import aux_funcs as af
 import bot_funcs as bf
 import levels as lv
 from db_funcs import DB_handler
-from user_data.credentials import apikey
+from user_data.credentials import apikey2
 
-bot = telebot.TeleBot(apikey)
+bot = telebot.TeleBot(apikey2)
 
-config = bf.load_config('config.json')
+config = bf.load_config('config_1h.json')
 chat_id = 234637822
 
 db = DB_handler(config["general"]["db_file_name"])
@@ -117,8 +117,6 @@ def main_func(trading_pairs: list, minute_flag: bool):
             
     elif minute_flag:
         bf.check_active_deals(db, bot, chat_id)
-        
-            
                 
         
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')

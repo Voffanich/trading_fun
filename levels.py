@@ -329,6 +329,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
     stop_price = 0
     last_candle_close = float(last_candle.Close)
     last_candle_open = float(last_candle.Open)
+    deal_comission = deal_config['deal_comission']
     # print(f'deal_config = {deal_config}')
     
     for level in basic_timeframe_levels: 
@@ -348,7 +349,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             print(f'{take_price=}')
             print(f'{stop_price=}')
             
-            profit_loss_ratio = round(get_profit_loss_ratio(take_price, stop_price, last_candle_close, 0.08, 10), 2)
+            profit_loss_ratio = round(get_profit_loss_ratio(take_price, stop_price, last_candle_close, deal_comission, 10), 2)
             print(f'{profit_loss_ratio=}')
             
             take_dist_perc: float = round(abs(take_price - last_candle_close) / last_candle_close * 100, 2)
@@ -377,7 +378,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             print(f'{take_price=}')
             print(f'{stop_price=}')
     
-            profit_loss_ratio = round(get_profit_loss_ratio(take_price, stop_price, last_candle_close, 0.08, 10), 2)
+            profit_loss_ratio = round(get_profit_loss_ratio(take_price, stop_price, last_candle_close, deal_comission, 10), 2)
             print(f'{profit_loss_ratio=}')
             
             take_dist_perc: float = round(abs(take_price - last_candle_close) / last_candle_close * 100, 2)
@@ -394,11 +395,14 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
 
 def get_profit_loss_ratio(take_price: float, stop_price: float, last_candle_close: float, comission_percent: float, leverage: int) -> float:
     
-    take_distance = abs(last_candle_close - take_price)
-    stop_distance = abs(last_candle_close - stop_price)
+    # take_distance = abs(last_candle_close - take_price)
+    # stop_distance = abs(last_candle_close - stop_price)
     
-    profit_loss_ratio = (take_distance - take_distance * comission_percent / 100 * leverage) / (stop_distance + stop_distance * comission_percent / 100 * leverage)
-    print(f'Profit/loss without comission: {take_distance / stop_distance}')
+    take_distance_perc = abs(last_candle_close - take_price) / last_candle_close * 100
+    stop_distance_perc = abs(last_candle_close - stop_price) / last_candle_close * 100
+    
+    profit_loss_ratio = (take_distance_perc - comission_percent * 2) / (stop_distance_perc + comission_percent * 2)
+    print(f'Profit/loss without comission: {take_distance_perc / stop_distance_perc}')
         
     return profit_loss_ratio
 

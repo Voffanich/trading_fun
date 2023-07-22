@@ -91,6 +91,7 @@ ORDER BY date;
 -- SELECT * FROM deals
 -- WHERE status <> 'active' AND strftime('%Y-%m-%d', datetime) = '2023-06-08';
 
+-- table with pair win-lose statictics
 SELECT pair, COUNT(*) AS deal_quantity,
   SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
   SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
@@ -99,6 +100,20 @@ SELECT pair, COUNT(*) AS deal_quantity,
 FROM deals
 GROUP BY pair;
 
+
+-- table with pair win-lose statictics
+-- SELECT pair, COUNT(*) AS deal_quantity,
+--   SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
+--   SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
+--   COUNT(*) - SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) - SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS active_deals,
+--   ROUND(CAST(SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS REAL) / CAST(SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS REAL), 2) AS lose_win_ratio
+-- FROM deals
+-- WHERE strftime('%Y-%m-%d', datetime) < '2023-06-30'
+-- GROUP BY pair;
+
+
+SELECT * FROM deals
+WHERE status <> 'active';
 
 SELECT * FROM deals
 WHERE status = 'active';
