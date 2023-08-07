@@ -16,13 +16,17 @@ def load_config(config_file_name: str) -> dict:
     with open(config_file_name) as config_file:
         return json.load(config_file)
 
-def get_ohlcv_data_binance(pair: str, timeframe: str, limit: int = 100) -> pd.DataFrame:
+def get_ohlcv_data_binance(pair: str, timeframe: str, limit: int = 100, futures: bool = False) -> pd.DataFrame:
         
-    url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval={timeframe}&limit={limit}"
+    url = f"https://api.binance.com/api/v3/klines?symbol={pair}&interval={timeframe}&limit={limit}"    
+    url_futures = f"https://fapi.binance.com/fapi/v1/klines?symbol={pair}&interval={timeframe}&limit={limit}"
 
-    
     try:
-        response = requests.get(url)
+        if futures:
+            response = requests.get(url_futures)
+        else: 
+            response = requests.get(url)
+            
         data = response.json()
         
         ohlcv_data = [] # Only open time, open, high, low, close, volume data from response
@@ -252,6 +256,11 @@ def check_active_deals(db, bot, chat_id):
             print(f'{timestamp()} - Some fucking error happened')
             print(ex)
             continue
+    
+def validate_deal(deal: object, deal_config: dict):
+    
+    
+    return True
     
         
 def show_finished_stats(deals_dataframe: pd.DataFrame):

@@ -357,7 +357,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             print(f'{take_dist_perc=}')
             print(f'{stop_dist_perc=}')
                         
-            if profit_loss_ratio >= deal_config['profit_loss_ratio'] and stop_dist_perc >= deal_config['stop_distance_threshold']:
+            if profit_loss_ratio >= deal_config['profit_loss_ratio_min'] and profit_loss_ratio <= deal_config['profit_loss_ratio_max'] and stop_dist_perc >= deal_config['stop_distance_threshold']:
                 return Deal(timeframe=trading_timeframe, entry_price=last_candle_close, take_price=take_price, stop_price=stop_price, 
                             timestamp=datetime.now(), profit_loss_ratio=profit_loss_ratio, take_dist_perc=take_dist_perc, stop_dist_perc=stop_dist_perc,
                             leverage=10, direction='short', status='active', best_price=last_candle_close, worst_price=last_candle_close,
@@ -386,14 +386,14 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             print(f'{take_dist_perc=}')
             print(f'{stop_dist_perc=}')
             
-            if profit_loss_ratio >= deal_config['profit_loss_ratio']  and stop_dist_perc >= deal_config['stop_distance_threshold']:
+            if profit_loss_ratio >= deal_config['profit_loss_ratio_min'] and profit_loss_ratio <= deal_config['profit_loss_ratio_max'] and stop_dist_perc >= deal_config['stop_distance_threshold']:
                 return Deal(timeframe=trading_timeframe, entry_price=last_candle_close, take_price=take_price, stop_price=stop_price, timestamp=datetime.now(), 
                             profit_loss_ratio=profit_loss_ratio, take_dist_perc=take_dist_perc, stop_dist_perc=stop_dist_perc,
                             leverage=10, direction='long', status='active', best_price=last_candle_close, worst_price=last_candle_close,
                             best_price_perc=0, worst_price_perc=0, current_price=last_candle_close, current_price_perc=0)  
 
 
-def get_profit_loss_ratio(take_price: float, stop_price: float, last_candle_close: float, comission_percent: float, leverage: int) -> float:
+def get_profit_loss_ratio(take_price: float, stop_price: float, last_candle_close: float, comission_percent: float, reverse_deal: bool = True) -> float:
     
     # take_distance = abs(last_candle_close - take_price)
     # stop_distance = abs(last_candle_close - stop_price)
@@ -401,8 +401,12 @@ def get_profit_loss_ratio(take_price: float, stop_price: float, last_candle_clos
     take_distance_perc = abs(last_candle_close - take_price) / last_candle_close * 100
     stop_distance_perc = abs(last_candle_close - stop_price) / last_candle_close * 100
     
-    profit_loss_ratio = (take_distance_perc - comission_percent * 2) / (stop_distance_perc + comission_percent * 2)
-    print(f'Profit/loss without comission: {take_distance_perc / stop_distance_perc}')
+    if reverse_deal:
+        profit_loss_ratio = (take_distance_perc + comission_percent * 2) / (stop_distance_perc - comission_percent * 2)
+    else:
+        profit_loss_ratio = (take_distance_perc - comission_percent * 2) / (stop_distance_perc + comission_percent * 2)
+        
+    print(f'Profit/loss without comission: {round(take_distance_perc / stop_distance_perc, 2)}')
         
     return profit_loss_ratio
 

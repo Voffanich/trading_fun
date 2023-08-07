@@ -10,7 +10,6 @@
             "BTCUSDT",
             "ETHUSDT",
             "TRXUSDT",
-            "LUNCUSDT",
             "ARBUSDT",
             "BNBUSDT",
             "LTCUSDT",
@@ -35,7 +34,6 @@
             "LUNAUSDT",
             "FILUSDT",
             "EDUUSDT",
-            "PEPEUSDT",
             "JOEUSDT"
         ]
     },    
@@ -55,13 +53,18 @@
         "stop_offset_modes": {"dist_percentage": -10, "lower_atr_x" : 1, "level_percentage": 10},
         "take_offset_modes": {"dist_percentage": 10, "lower_atr_x" : 1, "level_percentage": 10},
         "considering_level_density": 1,
-        "profit_loss_ratio": 1.0,
+        "profit_loss_ratio_min": 1.0,
+        "profit_loss_ratio_max": 5.0,
         "take_distance_threshold": 1.0,
         "stop_distance_threshold": 0.4,
         "deal_amount_of_bank": 0.03,
         "leverage_on": true,
         "max_leverage": 10,
-        "deal_comission": 0.04
-    
+        "deal_comission": 0.04,
+        "max_deals_direction": 7,
+        "max_deals_pair": 2,
+        "cool_down_period": 1,
+        "cool_down_loss_quantity": 3,
+        "cool_down_time": 6
     }
 }

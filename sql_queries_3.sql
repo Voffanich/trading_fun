@@ -62,6 +62,12 @@
 
 -- DROP TABLE deals_old;
 
+DELETE FROM deals 
+WHERE pair IS 'PEPEUSDT' AND status IS 'active';
+
+DELETE FROM deals 
+WHERE pair IS 'LUNCUSDT' AND status IS 'active';
+
 -- ALTER TABLE deals RENAME TO deals_old;
 -- ALTER TABLE deals_new RENAME TO deals;
 
@@ -95,9 +101,9 @@
 -- SELECT SUM(2 / profit_loss) as profit, COUNT(*) as profitable_deals, profit / profitable_deals AS average_profit FROM deals
 -- WHERE status = "loss" AND strftime("%Y-%m-%d", datetime) = "2023-06-16"
 
-UPDATE deals
-SET profit_loss = ROUND((take_dist_perc - 0.04*2)/(stop_dist_perc + 0.04*2), 2)
-WHERE status <> 'active';
+-- UPDATE deals
+-- SET profit_loss = ROUND((take_dist_perc - 0.04*2)/(stop_dist_perc + 0.04*2), 2)
+-- WHERE status <> 'active';
 
 -- UPDATE deals
 -- SET profit_loss = ROUND((take_dist_perc + 0.08*2)/(stop_dist_perc - 0.08*2), 2)
