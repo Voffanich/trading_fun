@@ -102,14 +102,14 @@ GROUP BY pair;
 
 
 -- table with pair win-lose statictics
--- SELECT pair, COUNT(*) AS deal_quantity,
---   SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
---   SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
---   COUNT(*) - SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) - SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS active_deals,
---   ROUND(CAST(SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS REAL) / CAST(SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS REAL), 2) AS lose_win_ratio
--- FROM deals
--- WHERE strftime('%Y-%m-%d', datetime) < '2023-06-30'
--- GROUP BY pair;
+SELECT pair, COUNT(*) AS deal_quantity,
+  SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
+  SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
+  COUNT(*) - SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) - SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS active_deals,
+  ROUND(CAST(SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS REAL) / CAST(SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS REAL), 2) AS lose_win_ratio
+FROM deals
+WHERE strftime('%Y-%m-%d', datetime) < '2023-07-11'
+GROUP BY pair;
 
 
 SELECT * FROM deals
