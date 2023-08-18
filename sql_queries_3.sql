@@ -62,11 +62,11 @@
 
 -- DROP TABLE deals_old;
 
-DELETE FROM deals 
-WHERE pair IS 'PEPEUSDT' AND status IS 'active';
+-- DELETE FROM deals 
+-- WHERE pair IS 'PEPEUSDT' AND status IS 'active';
 
-DELETE FROM deals 
-WHERE pair IS 'LUNCUSDT' AND status IS 'active';
+-- DELETE FROM deals 
+-- WHERE pair IS 'LUNCUSDT' AND status IS 'active';
 
 -- ALTER TABLE deals RENAME TO deals_old;
 -- ALTER TABLE deals_new RENAME TO deals;
@@ -108,3 +108,6 @@ WHERE pair IS 'LUNCUSDT' AND status IS 'active';
 -- UPDATE deals
 -- SET profit_loss = ROUND((take_dist_perc + 0.08*2)/(stop_dist_perc - 0.08*2), 2)
 -- WHERE status <> 'active';
+
+SELECT count(*) FROM deals
+WHERE status = 'active' AND pair = 'LINAUSDT'
