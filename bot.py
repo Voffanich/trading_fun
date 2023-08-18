@@ -65,7 +65,7 @@ def check_pair(bot, chat_id, pair: str, minute_flag: bool):
     if deal:
         print('\n')
     
-    if deal != None and bf.validate_deal(deal, deal_config):
+    if deal != None and bf.validate_deal(db, deal, deal_config, validate_on=True):
         
         deal.pair = pair
         

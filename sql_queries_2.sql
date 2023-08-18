@@ -80,6 +80,40 @@ WHERE status = 'loss';
 SELECT COUNT(*) * 1 as total_loss_1p FROM deals
 WHERE status = 'win';
 
+--## reverse strategy 1.5% risk per deal
+
+SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'loss'
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 1.5 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 1.5 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'win' 
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date;
+
+SELECT SUM(day_result) AS total_reverse_strategy_15p from 
+(SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+WHERE status = 'loss'
+GROUP BY date) as profit_table
+INNER JOIN 
+(SELECT strftime('%Y-%m-%d', datetime) AS date, COUNT(*) * 1.5 AS loss, COUNT(*) AS lost_deals, 
+    ROUND(COUNT(*) * 1.5 / COUNT(*), 3) AS average_loss FROM deals
+WHERE status = 'win'
+GROUP BY date) as loss_table 
+ON profit_table.date = loss_table.date);
+
+SELECT ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) as total_profit_15p FROM deals
+WHERE status = 'loss';
+
+SELECT COUNT(*) * 1.5 as total_loss_15p FROM deals
+WHERE status = 'win';
+
+
 -- ## direct strategy
 
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 

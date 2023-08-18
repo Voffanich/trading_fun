@@ -257,11 +257,37 @@ def check_active_deals(db, bot, chat_id):
             print(ex)
             continue
     
-def validate_deal(deal: object, deal_config: dict):
+def validate_deal(db: object, deal: object, deal_config: dict, validate_on: bool = False):
     
-    
-    return True
-    
+    if validate_on:
+        max_one_direction_deals = deal_config['max_one_direction_deals']
+        direction_quantity_diff = deal_config['direction_quantity_diff']
+        max_deals_total = deal_config['max_deals_total']
+        max_deals_pair = deal_config['max_deals_pair']
+        
+        total_active_deals_quantity = db.total_active_deals_quantity()
+        pair_active_deals_quantity = db.pair_active_deals_quantity(deal.pair)
+        active_shorts_quantity = db.active_shorts_quantity()
+        active_longs_quantity = db.active_longs_quantity()
+        
+        if total_active_deals_quantity >= max_deals_total:
+            print(f'-- Active deals quantity ({total_active_deals_quantity}) already at maximum ({max_deals_total}))')
+            return False
+        elif pair_active_deals_quantity >= max_deals_pair:
+            print(f'-- {deal.pair} active deals quantity ({pair_active_deals_quantity}) already at maximum ({max_deals_pair})')
+            return False
+        elif active_shorts_quantity >= max_one_direction_deals + direction_quantity_diff  or active_longs_quantity >= max_one_direction_deals + direction_quantity_diff:
+            if active_shorts_quantity - active_longs_quantity >= direction_quantity_diff and deal.direction == 'short':
+                print(f'-- Short deal can\'t be placed. Active shorts - {active_shorts_quantity}, active longs - {active_longs_quantity}, diff - {direction_quantity_diff}')
+                return False
+            elif active_longs_quantity - active_shorts_quantity >= direction_quantity_diff and deal.direction == 'long':
+                print(f'-- Long deal can\'t be placed. Active shorts - {active_shorts_quantity}, active longs - {active_longs_quantity}, diff - {direction_quantity_diff}')
+                return False
+        else:    
+            return True
+    else:
+        return True
+        
         
 def show_finished_stats(deals_dataframe: pd.DataFrame):
     

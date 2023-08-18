@@ -209,3 +209,75 @@ class DB_handler():
             
         # print(f'{restrictions=}')
         
+    def total_active_deals_quantity(self):
+        query = """
+        SELECT count(*) FROM deals
+        WHERE status = 'active';
+        """
+        
+        try:    
+            self.cursor.execute(query)
+            active_deals_quantity = self.cursor.fetchall()
+            self.connection.commit()    
+                        
+            return active_deals_quantity[0][0]
+                
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+        
+    
+    
+    def pair_active_deals_quantity(self, pair: str):
+        query = """
+        SELECT count(*) FROM deals
+        WHERE status = 'active' AND pair = ?;
+        """
+        
+        try:    
+            self.cursor.execute(query, (pair,))
+            pair_active_deals_quantity = self.cursor.fetchall()
+            self.connection.commit()    
+                        
+            return pair_active_deals_quantity[0][0]
+                
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+    
+    
+    def active_shorts_quantity(self):
+        query = """
+        SELECT count(*) FROM deals
+        WHERE status = 'active' AND direction = 'short';
+        """
+        
+        try:    
+            self.cursor.execute(query)
+            short_active_deals_quantity = self.cursor.fetchall()
+            self.connection.commit()    
+                        
+            return short_active_deals_quantity[0][0]
+                
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+    
+    
+    def active_longs_quantity(self):
+        query = """
+        SELECT count(*) FROM deals
+        WHERE status = 'active' AND direction = 'long';
+        """
+        
+        try:    
+            self.cursor.execute(query)
+            long_active_deals_quantity = self.cursor.fetchall()
+            self.connection.commit()    
+                        
+            return long_active_deals_quantity[0][0]
+                
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+    
