@@ -281,3 +281,32 @@ class DB_handler():
             print('SQLite error: ', error)
             return error
     
+    def last_lost_deals_times(self, depth):
+        query = """
+        SELECT finish_time FROM deals
+        WHERE status = 'loss'
+        ORDER BY finish_time DESC
+        LIMIT ?
+        """
+        
+        try:    
+            self.cursor.execute(query, (depth,))
+            last_lost_deals_timestamps = self.cursor.fetchall()
+            self.connection.commit()    
+            
+            last_lost_deals_timestamps.reverse()
+            
+            # print(last_lost_deals_timestamps)
+            
+            datetime_list = []
+            
+            for timestamp in last_lost_deals_timestamps:
+                datetime_list.append(dt.strptime(timestamp[0], '%Y-%m-%d %H:%M:%S'))
+            
+            # print(datetime_list) 
+            
+            return datetime_list
+                
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error

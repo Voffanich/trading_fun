@@ -120,7 +120,7 @@ def update_worst_price(db, deal: object, worst_price: float):
     db.update_deal_data('worst_price_perc', worst_price_perc, deal.deal_id)
 
 
-def update_active_deals(db, bot: object, chat_id: int, active_deals: list[object], last_candle: object):
+def update_active_deals(db: object, cd: object, bot: object, chat_id: int, active_deals: list[object], last_candle: object, reverse: bool = True):
     
     last_candle_high = af.r_signif(float(last_candle.High), 4)
     last_candle_low = af.r_signif(float(last_candle.Low), 4)
@@ -139,6 +139,9 @@ def update_active_deals(db, bot: object, chat_id: int, active_deals: list[object
                              
                 if last_candle_low < deal.worst_price:
                     update_worst_price(db, deal, last_candle_low)                    
+                
+                if reverse:
+                    cd.add_lost_deal(bot, chat_id)
                     
                 send_win_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Won')
@@ -149,6 +152,9 @@ def update_active_deals(db, bot: object, chat_id: int, active_deals: list[object
                 update_worst_price(db, deal, last_candle_low) 
                 if last_candle_high > deal.best_price:
                     update_best_price(db, deal, last_candle_high)
+                
+                if not reverse:
+                    cd.add_lost_deal(bot, chat_id)
                 
                 send_loss_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Lost')
@@ -171,6 +177,9 @@ def update_active_deals(db, bot: object, chat_id: int, active_deals: list[object
                 if last_candle_high > deal.worst_price:
                     update_worst_price(db, deal, last_candle_high) 
                 
+                if reverse:
+                    cd.add_lost_deal(bot, chat_id)
+                
                 send_win_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Won')
                 
@@ -180,6 +189,9 @@ def update_active_deals(db, bot: object, chat_id: int, active_deals: list[object
                 update_worst_price(db, deal, last_candle_high)
                 if last_candle_low < deal.best_price:
                     update_best_price(db, deal, last_candle_low)
+                
+                if not reverse:
+                    cd.add_lost_deal(bot, chat_id)
                 
                 send_loss_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Lost')
@@ -237,7 +249,7 @@ def send_loss_message(bot, chat_id, deal):
     bot.send_message(chat_id, text=message, parse_mode = 'HTML')
     
     
-def check_active_deals(db, bot, chat_id):
+def check_active_deals(db, cd, bot, chat_id):
     
     active_deal_pairs = db.get_active_deals_list()
     # print(f'{active_deal_pairs=}')
@@ -251,7 +263,7 @@ def check_active_deals(db, bot, chat_id):
             # get active deals from database    
             active_deals = db.read_active_deals(pair)
             #check and update active deals for result or best/worst price
-            update_active_deals(db, bot, chat_id, active_deals, last_candle)  
+            update_active_deals(db, cd, bot, chat_id, active_deals, last_candle)  
         except Exception as ex:
             print(f'{timestamp()} - Some fucking error happened')
             print(ex)
@@ -283,6 +295,8 @@ def validate_deal(db: object, deal: object, deal_config: dict, validate_on: bool
             elif active_longs_quantity - active_shorts_quantity >= direction_quantity_diff and deal.direction == 'long':
                 print(f'-- Long deal can\'t be placed. Active shorts - {active_shorts_quantity}, active longs - {active_longs_quantity}, diff - {direction_quantity_diff}')
                 return False
+            else:
+                return True
         else:    
             return True
     else:

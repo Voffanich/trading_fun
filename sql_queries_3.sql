@@ -109,5 +109,11 @@
 -- SET profit_loss = ROUND((take_dist_perc + 0.08*2)/(stop_dist_perc - 0.08*2), 2)
 -- WHERE status <> 'active';
 
-SELECT count(*) FROM deals
-WHERE status = 'active' AND pair = 'LINAUSDT'
+-- SELECT count(*) FROM deals
+-- WHERE status = 'active' AND pair = 'LINAUSDT'
+
+
+UPDATE deals
+SET status = 'win'
+WHERE deal_id = 1123;
+

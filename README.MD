@@ -28,7 +28,7 @@ If the market situation meets needed conditions bot sends message to telegram us
     - [X] check win
     - [X] check loss
     - [X] write best and worst price if deal haven't won or lost
-    - [Х] changing status of a deal depending on result
+    - [X] changing status of a deal depending on result
     - [X] check only active deal (separate function)
 - [ ] bot run with parameters in comand line
 - [ ] function for statistics display
