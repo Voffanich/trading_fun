@@ -112,8 +112,8 @@
 -- SELECT count(*) FROM deals
 -- WHERE status = 'active' AND pair = 'LINAUSDT'
 
+SELECT finish_time FROM deals
+WHERE status = "win" AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-23 00:05:00"
+ORDER BY finish_time
 
-UPDATE deals
-SET status = 'win'
-WHERE deal_id = 1123;
 
