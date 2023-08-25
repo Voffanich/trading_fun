@@ -2,7 +2,7 @@ import json
 import pprint
 import threading
 import time
-from datetime import datetime as dt
+from datetime import datetime
 
 import pandas as pd
 import requests
@@ -13,7 +13,6 @@ from telebot import types
 import aux_funcs as af
 import bot_funcs as bf
 import levels as lv
-from cooldown import Cooldown
 from db_funcs import DB_handler
 from user_data.credentials import apikey2
 
@@ -24,8 +23,6 @@ chat_id = 234637822
 
 db = DB_handler(config["general"]["db_file_name"])
 db.setup()
-
-cd = Cooldown(config['deal_config'])
 
 pair = "ETHUSDT" # Trading pair
 # pair = "API3USDT" # Trading pair
@@ -70,50 +67,26 @@ def check_pair(bot, chat_id, pair: str):
     
     if deal != None and bf.validate_deal(db, deal, deal_config, validate_on=True):
         
-        if not cd.status_on():
-            deal.pair = pair
-            
-            db.add_deal(deal)
-            
-            deal_message = f"""
-            Найдена сделка:
-            
-            Пара: {deal.pair}
-            Таймфрейм: {deal.timeframe}
-            Направление: {deal.direction}
-            Цена входа: {af.r_signif(deal.entry_price, 4)}
-            Тейк: {af.r_signif(deal.take_price, 4)}
-            Стоп: {af.r_signif(deal.stop_price, 4)}
-            Профит-лосс: {deal.profit_loss_ratio}
-            Дистанция до тейка: {deal.take_dist_perc}%
-            Дистанция до стопа: {deal.stop_dist_perc}%
-            """
+        deal.pair = pair
         
-            bot.send_message(chat_id, text = deal_message)    
-        else:
-            cooldown_start_time = dt.strftime(cd.get_start_time(), "%Y-%m-%d %H:%M:%S")
-            cooldown_finish_time = dt.strftime(cd.get_finish_time(), "%Y-%m-%d %H:%M:%S")
-            
-            print(f'-- Cooldown active from {cooldown_start_time} to {cooldown_finish_time}')
-            
-            message = f"""
-            Найдена сделка:
-            
-            Пара: {deal.pair}
-            Таймфрейм: {deal.timeframe}
-            Направление: {deal.direction}
-            Цена входа: {af.r_signif(deal.entry_price, 4)}
-            Тейк: {af.r_signif(deal.take_price, 4)}
-            Стоп: {af.r_signif(deal.stop_price, 4)}
-            Профит-лосс: {deal.profit_loss_ratio}
-            Дистанция до тейка: {deal.take_dist_perc}%
-            Дистанция до стопа: {deal.stop_dist_perc}%
-            
-            <b>Но активна пауза с {cooldown_start_time} по {cooldown_finish_time}</b>
-            """
+        db.add_deal(deal)
         
-            bot.send_message(chat_id, text = message, parse_mode = 'HTML') 
-            
+        deal_message = f"""
+        Найдена сделка:
+        
+        Пара: {deal.pair}
+        Таймфрейм: {deal.timeframe}
+        Направление: {deal.direction}
+        Цена входа: {af.r_signif(deal.entry_price, 4)}
+        Тейк: {af.r_signif(deal.take_price, 4)}
+        Стоп: {af.r_signif(deal.stop_price, 4)}
+        Профит-лосс: {deal.profit_loss_ratio}
+        Дистанция до тейка: {deal.take_dist_perc}%
+        Дистанция до стопа: {deal.stop_dist_perc}%
+        """
+    
+        bot.send_message(chat_id, text = deal_message)    
+      
 
 @bot.message_handler(commands=['start'])
 def start(message, res=False):
@@ -126,26 +99,24 @@ def start(message, res=False):
 def main_func(trading_pairs: list, minute_flag: bool):
     
     if minute_flag:
-        print(f'\nChecking active deals at {dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")}')
+        print(f'\nChecking active deals at {datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")}')
     elif not minute_flag:
-        print(dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S'))
-        bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}")   
+        print(datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S'))
+        bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S')}")   
     
     if not minute_flag:
         for pair in trading_pairs:
             print(f'Pair {pair}')
             
             try:
-                check_pair(bot, chat_id, pair)
+                check_pair(bot, chat_id, pair, minute_flag)
             except Exception as ex:
                 print(f'{bf.timestamp()} - Some fucking error happened')
                 print(ex)
                 continue
             
     elif minute_flag:
-        bf.check_active_deals(db, cd, bot, chat_id)
-        
-            
+        bf.check_active_deals(db, bot, chat_id)
                 
         
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')

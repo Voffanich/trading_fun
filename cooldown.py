@@ -4,7 +4,7 @@ from datetime import datetime as dt
 
 class Cooldown():
     
-    def __init__(self, deal_config: dict, db: object):
+    def __init__(self, deal_config: dict, db: object, reverse: bool = True):
         self.CHECK_PERIOD = datetime.timedelta(hours=deal_config['cool_down_check_period'])
         self.LOSS_QUANTITY = deal_config['cool_down_loss_quantity']
         self.LENGTH = datetime.timedelta(hours=deal_config['cool_down_length'])
@@ -12,7 +12,9 @@ class Cooldown():
         self.start_time = dt.now()
         self.finish_time = dt.now()
         
-        self.lost_deals_timestamps: list = db.last_lost_deals_times(self.LOSS_QUANTITY)
+        self.check_existing_cooldown()
+        
+        self.lost_deals_timestamps: list = db.last_lost_deals_times(self.LOSS_QUANTITY, reverse)
         
         
     def add_lost_deal(self, bot: object, chat_id: int):
@@ -52,3 +54,6 @@ class Cooldown():
     
     def get_lost_deals_timestamps(self) -> list:
         return self.lost_deals_timestamps
+    
+    def check_existing_cooldown(self):
+        pass

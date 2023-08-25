@@ -281,13 +281,21 @@ class DB_handler():
             print('SQLite error: ', error)
             return error
     
-    def last_lost_deals_times(self, depth):
-        query = """
-        SELECT finish_time FROM deals
-        WHERE status = 'loss'
-        ORDER BY finish_time DESC
-        LIMIT ?
-        """
+    def last_lost_deals_times(self, depth, reverse: bool):
+        if reverse:        
+            query = """
+            SELECT finish_time FROM deals
+            WHERE status = 'win'
+            ORDER BY finish_time DESC
+            LIMIT ?
+            """
+        else:
+            query = """
+            SELECT finish_time FROM deals
+            WHERE status = 'loss'
+            ORDER BY finish_time DESC
+            LIMIT ?
+            """
         
         try:    
             self.cursor.execute(query, (depth,))

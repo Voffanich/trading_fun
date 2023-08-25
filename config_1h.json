@@ -69,6 +69,6 @@
 
         "cool_down_check_period": 1,
         "cool_down_loss_quantity": 3,
-        "cool_down_time": 12
+        "cool_down_length": 12
     }
 }
