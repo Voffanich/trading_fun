@@ -113,7 +113,7 @@
 -- WHERE status = 'active' AND pair = 'LINAUSDT'
 
 SELECT finish_time FROM deals
-WHERE status = "win" AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-23 00:05:00"
+WHERE status = "win" AND strftime("%Y-%m-%d %H:%M:%S", finish_time) > "2023-08-28 07:00:00"
 ORDER BY finish_time
 
 
