@@ -25,7 +25,7 @@ chat_id = 234637822
 db = DB_handler(config["general"]["db_file_name"])
 db.setup()
 
-cd = Cooldown(config['deal_config'], db)
+cd = Cooldown(config['deal_config'], db, bot, chat_id)
 
 pair = "ETHUSDT" # Trading pair
 # pair = "API3USDT" # Trading pair

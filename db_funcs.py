@@ -318,3 +318,32 @@ class DB_handler():
         except sqlite3.Error as error:
             print('SQLite error: ', error)
             return error
+        
+    def period_lost_deals_times(self, cooldown_length, check_period, reverse: bool):
+        if reverse:        
+            query = """
+            SELECT finish_time FROM deals
+            WHERE status = 'win' AND strftime("%Y-%m-%d %H:%M:%S", finish_time) > ?
+            ORDER BY finish_time DESC
+            """
+        else:
+            query = """
+            SELECT finish_time FROM deals
+            WHERE status = 'loss' AND strftime("%Y-%m-%d %H:%M:%S", finish_time) > ?
+            ORDER BY finish_time DESC
+            """
+        
+        try:    
+            time_depth = dt.strftime(dt.now() - check_period - cooldown_length, "%Y-%m-%d %H:%M:%S")
+            
+            self.cursor.execute(query, (time_depth,))
+            period_lost_deals_timestamps = self.cursor.fetchall()
+            self.connection.commit()
+            
+            period_lost_deals_datetimes = [dt.strptime(timestamp[0], "%Y-%m-%d %H:%M:%S") for timestamp in period_lost_deals_timestamps]
+            
+            return period_lost_deals_datetimes            
+            
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error

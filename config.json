@@ -72,8 +72,8 @@
         "max_deals_total": 16,
         "max_deals_pair": 2,
 
-        "cool_down_check_period": 1,
+        "cool_down_check_period": 0.2,
         "cool_down_loss_quantity": 3,
-        "cool_down_length": 12
+        "cool_down_length": 1
     }
 }
