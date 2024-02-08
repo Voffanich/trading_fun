@@ -4,7 +4,7 @@ from datetime import datetime as dt
 
 class Cooldown():
     
-    def __init__(self, deal_config: dict, db: object, bot: object, chat_id: int, reverse: bool = True):
+    def __init__(self, deal_config: dict, db: object, bot: object, chat_id: int, reverse: bool = False):
         
         print(f'\n!!! Cooldown is set up for {"REVERSE" if reverse else "DIRECT"} deal making.\n')
         
@@ -33,7 +33,7 @@ class Cooldown():
                 self.start_time = dt.now()
                 self.finish_time = dt.now() + self.LENGTH
                 
-            self.send_cooldown_set_messages(bot, chat_id)   
+                self.send_cooldown_set_messages(bot, chat_id)   
                 
     
     def send_cooldown_set_messages(self, bot: object, chat_id: int):

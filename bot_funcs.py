@@ -7,6 +7,7 @@ import requests
 import schedule
 
 import aux_funcs as af
+import indicators as ind
 
 
 def timestamp() -> str:
@@ -89,9 +90,11 @@ def set_schedule(timeframe: str, task, trading_pairs: list):
         print("Invalid time period string")
     
     while True:
-        schedule.run_pending()
-        time.sleep(1)
-        
+        try:
+            schedule.run_pending()
+            time.sleep(1)
+        except Exception:
+            print(Exception)
 
 def update_current_deal_price(db, deal: object, current_price: float):
     
@@ -139,12 +142,12 @@ def update_active_deals(db: object, cd: object, bot: object, chat_id: int, activ
                              
                 if last_candle_low < deal.worst_price:
                     update_worst_price(db, deal, last_candle_low)                    
-                
-                if reverse:
-                    cd.add_lost_deal(bot, chat_id)
                     
                 send_win_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Won')
+                
+                if reverse:
+                    cd.add_lost_deal(bot, chat_id)
                 
             elif last_candle_low < deal.stop_price:
                 db.update_deal_data('status', 'loss', deal.deal_id)
@@ -153,11 +156,11 @@ def update_active_deals(db: object, cd: object, bot: object, chat_id: int, activ
                 if last_candle_high > deal.best_price:
                     update_best_price(db, deal, last_candle_high)
                 
-                if not reverse:
-                    cd.add_lost_deal(bot, chat_id)
-                
                 send_loss_message(bot, chat_id, deal)
                 print(f'Deal id {deal.deal_id}, {deal.pair}, {deal.direction} - Lost')
+                
+                if not reverse:
+                    cd.add_lost_deal(bot, chat_id)
                 
             elif last_candle_high > deal.best_price:
                 update_best_price(db, deal, last_candle_high)
@@ -269,8 +272,8 @@ def check_active_deals(db, cd, bot, chat_id):
             print(ex)
             continue
     
-def validate_deal(db: object, deal: object, deal_config: dict, validate_on: bool = False):
-    
+def validate_deal(db: object, deal: object, deal_config: dict, basic_tf_ohlvc_df: pd.DataFrame, validate_on: bool = False):
+            
     if validate_on:
         max_one_direction_deals = deal_config['max_one_direction_deals']
         direction_quantity_diff = deal_config['direction_quantity_diff']
@@ -288,20 +291,64 @@ def validate_deal(db: object, deal: object, deal_config: dict, validate_on: bool
         elif pair_active_deals_quantity >= max_deals_pair:
             print(f'-- {deal.pair} active deals quantity ({pair_active_deals_quantity}) already at maximum ({max_deals_pair})')
             return False
-        elif active_shorts_quantity >= max_one_direction_deals + direction_quantity_diff  or active_longs_quantity >= max_one_direction_deals + direction_quantity_diff:
+        # elif active_shorts_quantity >= max_one_direction_deals + direction_quantity_diff  or active_longs_quantity >= max_one_direction_deals + direction_quantity_diff:
+        elif active_shorts_quantity >= max_one_direction_deals  or active_longs_quantity >= max_one_direction_deals:
             if active_shorts_quantity - active_longs_quantity >= direction_quantity_diff and deal.direction == 'short':
                 print(f'-- Short deal can\'t be placed. Active shorts - {active_shorts_quantity}, active longs - {active_longs_quantity}, diff - {direction_quantity_diff}')
                 return False
             elif active_longs_quantity - active_shorts_quantity >= direction_quantity_diff and deal.direction == 'long':
                 print(f'-- Long deal can\'t be placed. Active shorts - {active_shorts_quantity}, active longs - {active_longs_quantity}, diff - {direction_quantity_diff}')
                 return False
-            else:
-                return True
-        else:    
-            return True
+        
+    if deal_config['indicators_validation']:
+        return validate_indicators(deal, deal_config, basic_tf_ohlvc_df) 
     else:
         return True
         
+
+def validate_indicators(deal: object, deal_config: dict, basic_tf_ohlvc_df: pd.DataFrame):
+    
+    indicators_target = deal_config['indicators']
+    
+    if deal.direction == 'long':
+        
+        print('entering long rsi check')
+        
+        print(indicators_target['RSI_long'])
+        
+        rsi_target = indicators_target['RSI_long']
+        rsi = ind.RSI(basic_tf_ohlvc_df)
+        
+        print(f'{rsi=}, {rsi_target=}')
+        
+        if rsi_target and rsi < rsi_target:
+            print(f'RSI = {rsi} < target RSI = {rsi_target}, deal is approved')
+            deal.indicators = deal.indicators + f'RSI:{rsi};'
+            return True
+        elif rsi_target and rsi > rsi_target: 
+            print(f'RSI = {rsi} > target RSI = {rsi_target}, deal is not approved')
+            return False
+        else:
+            return True
+        
+    elif deal.direction == 'short':
+        
+        print('entering short rsi check')        
+        
+        rsi_target = indicators_target['RSI_short']
+        rsi = ind.RSI(basic_tf_ohlvc_df)
+        
+        print(f'{rsi=}, {rsi_target=}')
+        
+        if rsi_target and rsi > rsi_target:
+            print(f'RSI = {rsi} > target RSI = {rsi_target}, deal is approved')
+            deal.indicators = deal.indicators + f'RSI:{rsi};'
+            return True
+        elif rsi_target and rsi < rsi_target: 
+            print(f'RSI = {rsi} < target RSI = {rsi_target}, deal is not approved')
+            return False
+        else:    
+            return True
         
 def show_finished_stats(deals_dataframe: pd.DataFrame):
     

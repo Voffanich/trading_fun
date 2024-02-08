@@ -25,7 +25,7 @@ chat_id = 234637822
 db = DB_handler(config["general"]["db_file_name"])
 db.setup()
 
-cd = Cooldown(config['deal_config'], db, bot, chat_id)
+cd = Cooldown(config['deal_config'], db, bot, chat_id, reverse=False)
 
 pair = "ETHUSDT" # Trading pair
 # pair = "API3USDT" # Trading pair
@@ -49,6 +49,7 @@ def check_pair(bot, chat_id, pair: str):
         df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe])
         if timeframe == trading_timeframe:
             last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
+            basic_tf_ohlvc_df = df
         levels += lv.find_levels(df, timeframe)
     # time.sleep(0.5)
             
@@ -68,7 +69,7 @@ def check_pair(bot, chat_id, pair: str):
     if deal:
         print('\n')
     
-    if deal != None and bf.validate_deal(db, deal, deal_config, validate_on=True):
+    if deal != None and bf.validate_deal(db, deal, deal_config, basic_tf_ohlvc_df, validate_on=True):
         
         if not cd.status_on():
             deal.pair = pair
@@ -162,7 +163,8 @@ sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule, kwargs = {'
     
 if __name__ == '__main__':
     sсheduled_tasks_thread.start()
-    try:
-        bot.polling(non_stop = True, interval = 0, timeout = 0)
-    except:
-        pass
+    bot.infinity_polling()
+    # try:
+    #     bot.polling(non_stop = True, interval = 0, timeout = 0)
+    # except:
+    #     pass
