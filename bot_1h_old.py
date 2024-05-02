@@ -35,8 +35,9 @@ checked_timeframes = bf.define_checked_timeframes(config['general']['timeframes_
 limit = config['levels']['candle_depth']  # Limit of candles requested 
 basic_candle_depth = config['general']['basic_candle_depth'] # number of candles to check for each checked timeframe
 deal_config = config['deal_config']     # config for deal estimation
+reverse = deal_config['cool_down_reverse']      # config of counting lost deals reverse or direct
 
-   
+
 
 def check_pair(bot, chat_id, pair: str):
 
@@ -116,7 +117,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
                 continue
             
     elif minute_flag:
-        bf.check_active_deals(db, bot, chat_id)
+        bf.check_active_deals(db, bot, chat_id, reverse)
                 
         
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')

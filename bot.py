@@ -25,7 +25,7 @@ chat_id = 234637822
 db = DB_handler(config["general"]["db_file_name"])
 db.setup()
 
-cd = Cooldown(config['deal_config'], db, bot, chat_id, reverse=False)
+
 
 pair = "ETHUSDT" # Trading pair
 # pair = "API3USDT" # Trading pair
@@ -38,8 +38,9 @@ checked_timeframes = bf.define_checked_timeframes(config['general']['timeframes_
 limit = config['levels']['candle_depth']  # Limit of candles requested 
 basic_candle_depth = config['general']['basic_candle_depth'] # number of candles to check for each checked timeframe
 deal_config = config['deal_config']     # config for deal estimation
-
+reverse = deal_config['cool_down_reverse']      # config of counting lost deals reverse or direct
    
+cd = Cooldown(config['deal_config'], db, bot, chat_id, reverse=reverse)
 
 def check_pair(bot, chat_id, pair: str):
 
@@ -144,7 +145,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
                 continue
             
     elif minute_flag:
-        bf.check_active_deals(db, cd, bot, chat_id)
+        bf.check_active_deals(db, cd, bot, chat_id, reverse)
         
             
                 

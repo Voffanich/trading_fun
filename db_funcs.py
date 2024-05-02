@@ -187,27 +187,7 @@ class DB_handler():
         except sqlite3.Error as error:
             print('SQLite error: ', error)
             return error
-        
-    def show_perfomance_stats(self, conditions: list):
-        
-        restrictions = 'WHERE'
-        
-        if conditions:        
-            counter = 0
-        
-            for condition in conditions:
-                if counter > 0:
-                    restrictions += ' AND'
-                
-                restrictions += f' {condition}'
-                counter += 1
-        
-        query = """
-        SELECT * FROM deals
-        {restrictions} AND status <> "active"
-        """
-            
-        # print(f'{restrictions=}')
+     
         
     def total_active_deals_quantity(self):
         query = """
@@ -347,3 +327,87 @@ class DB_handler():
         except sqlite3.Error as error:
             print('SQLite error: ', error)
             return error
+        
+    def get_active_deals_stats(self):
+        message_text = ''
+        
+        query = """
+            SELECT deal_id, datetime, pair, timeframe, direction, profit_loss, take_dist_perc, stop_dist_perc, current_price_perc FROM deals
+            WHERE status = 'active'
+            ORDER BY datetime DESC
+            """
+        try:    
+            self.cursor.execute(query)
+            active_deals = self.cursor.fetchall()
+            self.connection.commit()    
+            
+            for deal in active_deals:
+                message_text += f"""\n
+ID: {deal[0]}
+Дата входа: {deal[1]}
+Пара: {deal[2]}
+Таймфрейм: {deal[3]}
+Направление: {deal[4]}
+Профит-лосс: {deal[5]}
+Расстояние до тейка %: {deal[6]}
+Расстояние до стопа %: {deal[7]}
+Текущая позиция %: {deal[8]}"""     
+                
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+            
+        return message_text
+    
+       
+    def show_perfomance_stats(self, risk_per_deal: float, conditions: list = None, initial_bank: int = 100):
+        
+        bank = initial_bank
+        risk = risk_per_deal
+        restrictions = 'WHERE'
+        
+        if conditions:        
+            counter = 0
+        
+            for condition in conditions:
+                if counter > 0:
+                    restrictions += ' AND'
+                
+                restrictions += f' {condition}'
+                counter += 1
+        
+        query = f"""
+        SELECT datetime, pair, direction, take_dist_perc, stop_dist_perc, status, finish_time, profit_loss FROM deals
+        {restrictions} status <> "active"
+        ORDER BY finish_time
+        """
+        
+        try:    
+            self.cursor.execute(query)
+            deals = self.cursor.fetchall()
+            self.connection.commit()  
+            
+            for deal in deals:
+                if deal[5] == 'win':
+                    bank += bank * risk * deal[7]
+                    print(f'Win, bank = {bank}')
+                elif deal[5] == 'loss':
+                    bank -= bank * risk
+                    print(f'Loss, bank = {bank}')
+            
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+        
+        message_text = f"""\n
+Стартовый банк: {initial_bank}
+Конечный банк: {round(bank, 2)}
+        """
+        
+        return message_text
+    
+    
+    def show_stats(self, period_start = None, period_finish = None):
+        if not period_start and not period_finish:
+            message_text = 'Cnfnrf'
+        return message_text

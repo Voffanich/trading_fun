@@ -252,7 +252,7 @@ def send_loss_message(bot, chat_id, deal):
     bot.send_message(chat_id, text=message, parse_mode = 'HTML')
     
     
-def check_active_deals(db, cd, bot, chat_id):
+def check_active_deals(db, cd, bot, chat_id, reverse):
     
     active_deal_pairs = db.get_active_deals_list()
     # print(f'{active_deal_pairs=}')
@@ -266,7 +266,7 @@ def check_active_deals(db, cd, bot, chat_id):
             # get active deals from database    
             active_deals = db.read_active_deals(pair)
             #check and update active deals for result or best/worst price
-            update_active_deals(db, cd, bot, chat_id, active_deals, last_candle)  
+            update_active_deals(db, cd, bot, chat_id, active_deals, last_candle, reverse=reverse)  
         except Exception as ex:
             print(f'{timestamp()} - Some fucking error happened')
             print(ex)
@@ -324,11 +324,13 @@ def validate_indicators(deal: object, deal_config: dict, basic_tf_ohlvc_df: pd.D
         if rsi_target and rsi < rsi_target:
             print(f'RSI = {rsi} < target RSI = {rsi_target}, deal is approved')
             deal.indicators = deal.indicators + f'RSI:{rsi};'
+            print(f'{deal.indicators=}')
             return True
         elif rsi_target and rsi > rsi_target: 
             print(f'RSI = {rsi} > target RSI = {rsi_target}, deal is not approved')
             return False
         else:
+            print('Long ELSE!!')
             return True
         
     elif deal.direction == 'short':
@@ -343,11 +345,13 @@ def validate_indicators(deal: object, deal_config: dict, basic_tf_ohlvc_df: pd.D
         if rsi_target and rsi > rsi_target:
             print(f'RSI = {rsi} > target RSI = {rsi_target}, deal is approved')
             deal.indicators = deal.indicators + f'RSI:{rsi};'
+            print(f'{deal.indicators=}')
             return True
         elif rsi_target and rsi < rsi_target: 
             print(f'RSI = {rsi} < target RSI = {rsi_target}, deal is not approved')
             return False
-        else:    
+        else:
+            print('Short ELSE!!')    
             return True
         
 def show_finished_stats(deals_dataframe: pd.DataFrame):

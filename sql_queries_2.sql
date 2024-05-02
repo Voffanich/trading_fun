@@ -17,8 +17,8 @@
 --## reverse strategy 2% risk per deal
 
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'loss' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00"
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -30,8 +30,8 @@ ON profit_table.date = loss_table.date;
 
 SELECT SUM(day_result) AS total_reverse_strategy_2p from 
 (SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'loss' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00"
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -41,7 +41,7 @@ WHERE status = 'win' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 0
 GROUP BY date) as loss_table 
 ON profit_table.date = loss_table.date);
 
-SELECT ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) as total_profit_2p FROM deals
+SELECT ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) as total_profit_2p FROM deals
 WHERE status = 'loss';
 
 SELECT COUNT(*) * 2 as total_loss_2p FROM deals
@@ -82,8 +82,8 @@ WHERE status = 'win';
 --## reverse strategy 1.5% risk per deal
 
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1.5 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(1.5 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'loss' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00"
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -95,8 +95,8 @@ ON profit_table.date = loss_table.date;
 
 SELECT SUM(day_result) AS total_reverse_strategy_15p from 
 (SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1.5 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(1.5 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'loss' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00"
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -106,7 +106,7 @@ WHERE status = 'win' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 0
 GROUP BY date) as loss_table 
 ON profit_table.date = loss_table.date);
 
-SELECT ROUND(SUM(1.5 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) as total_profit_15p FROM deals
+SELECT ROUND(SUM(1.5 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) as total_profit_15p FROM deals
 WHERE status = 'loss';
 
 SELECT COUNT(*) * 1.5 as total_loss_15p FROM deals
@@ -115,8 +115,8 @@ WHERE status = 'win';
 --## reverse strategy 1% risk per deal
 
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(1 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(1 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'loss' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00"
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -128,8 +128,8 @@ ON profit_table.date = loss_table.date;
 
 SELECT SUM(day_result) AS total_reverse_strategy_1p from 
 (SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(1 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(1 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(1 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'loss' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00"
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -139,7 +139,7 @@ WHERE status = 'win' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 0
 GROUP BY date) as loss_table 
 ON profit_table.date = loss_table.date);
 
-SELECT ROUND(SUM(1 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) as total_profit_1p FROM deals
+SELECT ROUND(SUM(1 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) as total_profit_1p FROM deals
 WHERE status = 'loss';
 
 SELECT COUNT(*) * 1 as total_loss_1p FROM deals
@@ -181,8 +181,8 @@ WHERE status = 'win';
 -- CORRECT DIRECT STRATEGY
 
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * (take_dist_perc - 0.08)/(stop_dist_perc + 0.08)), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(2 * (take_dist_perc - 0.08)/(stop_dist_perc + 0.08)) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'win' 
 -- WHERE status = 'win' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00" 
 GROUP BY date) as profit_table
@@ -196,8 +196,8 @@ ON profit_table.date = loss_table.date;
 
 SELECT SUM(day_result) AS total_direct_strategy from (
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * (take_dist_perc - 0.08)/(stop_dist_perc + 0.08)), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(2 * (take_dist_perc - 0.08)/(stop_dist_perc + 0.08)) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'win'
 -- WHERE status = 'win' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00"
 GROUP BY date) as profit_table
@@ -208,6 +208,12 @@ WHERE status = 'loss'
 -- WHERE status = 'loss' AND strftime("%Y-%m-%d %H:%M:%S", datetime) > "2023-08-18 00:00:00" 
 GROUP BY date) as loss_table 
 ON profit_table.date = loss_table.date);
+
+SELECT ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)), 3) as total_profit_direct FROM deals
+WHERE status = 'win';
+
+SELECT COUNT(*) * 2 as total_loss_direct FROM deals
+WHERE status = 'loss';
 
 -- ## data for PL > 15
 
@@ -250,8 +256,8 @@ ON profit_table.date = loss_table.date);
 --## reverse strategy with good pairs
 
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'loss' AND pair IN ('ATOMUSDT', 'BNBUSDT', 'BTCUSDT', 'PEPEUSDT', 'TRXUSDT')
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -263,8 +269,8 @@ ON profit_table.date = loss_table.date;
 
 SELECT SUM(day_result) AS good_reverse_strategy from 
 (SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(2 * ((stop_dist_perc - 0.08)/(take_dist_perc + 0.08))) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * ((stop_dist_perc - 0.05)/(take_dist_perc + 0.05))) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'loss' AND pair IN ('ATOMUSDT', 'BNBUSDT', 'BTCUSDT', 'PEPEUSDT', 'TRXUSDT')
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -277,8 +283,8 @@ ON profit_table.date = loss_table.date);
 -- ## direct strategy with good pairs
 
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * (take_dist_perc - 0.08)/(stop_dist_perc + 0.08)), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(2 * (take_dist_perc - 0.08)/(stop_dist_perc + 0.08)) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'win' AND pair IN ('APTUUSDT', 'EDUUSDT', 'ETCUSDT', 'GALAUSDT', 'JOEUSDT', 'LINAUSDT', 'LUNCUSDT', 'MATICUSDT', 'NEARUSDT', 'SOLUSDT', 'SUIUSDT', 'SUSHIUSDT')
 GROUP BY date) as profit_table
 INNER JOIN 
@@ -290,8 +296,8 @@ ON profit_table.date = loss_table.date;
 
 SELECT SUM(day_result) AS good_direct_strategy from (
 SELECT  profit_table.date, profit - loss as day_result, profit, profitable_deals, average_profit, loss, lost_deals, average_loss FROM 
-(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * (take_dist_perc - 0.08)/(stop_dist_perc + 0.08)), 3) AS profit, COUNT(*) AS profitable_deals, 
-    ROUND(SUM(2 * (take_dist_perc - 0.08)/(stop_dist_perc + 0.08)) / COUNT(*), 3) AS average_profit FROM deals
+(SELECT strftime('%Y-%m-%d', datetime) AS date, ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)), 3) AS profit, COUNT(*) AS profitable_deals, 
+    ROUND(SUM(2 * (take_dist_perc - 0.05)/(stop_dist_perc + 0.05)) / COUNT(*), 3) AS average_profit FROM deals
 WHERE status = 'win' AND pair IN ('APTUUSDT', 'EDUUSDT', 'ETCUSDT', 'GALAUSDT', 'JOEUSDT', 'LINAUSDT', 'LUNCUSDT', 'MATICUSDT', 'NEARUSDT', 'SOLUSDT', 'SUIUSDT', 'SUSHIUSDT')
 GROUP BY date) as profit_table
 INNER JOIN 
