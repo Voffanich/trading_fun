@@ -413,7 +413,7 @@ ID: {deal[0]}
             return error
         
         average_profit_abs = round((bank - initial_bank) / len(deals), 2)
-        average_profit_rel = round(((bank - initial_bank) / len(deals))/bank * 100, 2)
+        # average_profit_rel = round(((bank - initial_bank) / len(deals))/bank * 100, 2)
         average_profit_rel_adj = round((win_perc_counter + loss_counter * risk * -1)/len(deals) * 100, 2)
         
         message_text = f"""\n
@@ -423,8 +423,7 @@ ID: {deal[0]}
 Сделок: {len(deals)}
 Прибыльных/убыточных сделок: {win_counter}/{loss_counter}
 Средняя прибыль на сделку абсолютная: {average_profit_abs}
-Средняя прибыль на сделку %: {average_profit_rel}
-Средняя прибыль на сделку % уточн.: {average_profit_rel_adj}
+Средняя прибыль на сделку %: {average_profit_rel_adj}
         """
         
         return message_text
