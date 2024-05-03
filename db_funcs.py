@@ -332,7 +332,8 @@ class DB_handler():
         message_text = ''
         
         query = """
-            SELECT deal_id, datetime, pair, timeframe, direction, profit_loss, take_dist_perc, stop_dist_perc, current_price_perc FROM deals
+            SELECT deal_id, datetime, pair, timeframe, direction, profit_loss, take_dist_perc, stop_dist_perc, current_price_perc,
+            entry_price, current_price, take_price, stop_price FROM deals
             WHERE status = 'active'
             ORDER BY datetime DESC
             """
@@ -350,8 +351,14 @@ ID: {deal[0]}
 Направление: {deal[4]}
 Профит-лосс: {deal[5]}
 Расстояние до тейка %: {deal[6]}
+Текущая позиция %: {deal[8]}
 Расстояние до стопа %: {deal[7]}
-Текущая позиция %: {deal[8]}"""     
+
+Цена входа: {deal[9]}
+Цена тейка: {deal[11]}
+Цена текущая: {deal[10]}
+Цена стопа: {deal[12]}
+"""     
                 
         except sqlite3.Error as error:
             print('SQLite error: ', error)
@@ -381,6 +388,9 @@ ID: {deal[0]}
         {restrictions} status <> "active"
         ORDER BY finish_time
         """
+        loss_counter = 0
+        win_counter = 0
+        win_perc_counter = 0
         
         try:    
             self.cursor.execute(query)
@@ -390,18 +400,31 @@ ID: {deal[0]}
             for deal in deals:
                 if deal[5] == 'win':
                     bank += bank * risk * deal[7]
+                    win_counter += 1
+                    win_perc_counter += risk * deal[7]
                     print(f'Win, bank = {bank}')
                 elif deal[5] == 'loss':
                     bank -= bank * risk
+                    loss_counter += 1
                     print(f'Loss, bank = {bank}')
             
         except sqlite3.Error as error:
             print('SQLite error: ', error)
             return error
         
+        average_profit_abs = round((bank - initial_bank) / len(deals), 2)
+        average_profit_rel = round(((bank - initial_bank) / len(deals))/bank * 100, 2)
+        average_profit_rel_adj = round((win_perc_counter + loss_counter * risk * -1)/len(deals) * 100, 2)
+        
         message_text = f"""\n
 Стартовый банк: {initial_bank}
 Конечный банк: {round(bank, 2)}
+Риск на сделку: {risk}
+Сделок: {len(deals)}
+Прибыльных/убыточных сделок: {win_counter}/{loss_counter}
+Средняя прибыль на сделку абсолютная: {average_profit_abs}
+Средняя прибыль на сделку %: {average_profit_rel}
+Средняя прибыль на сделку % уточн.: {average_profit_rel_adj}
         """
         
         return message_text

@@ -354,6 +354,3 @@ def validate_indicators(deal: object, deal_config: dict, basic_tf_ohlvc_df: pd.D
             print('Short ELSE!!')    
             return True
         
-def show_finished_stats(deals_dataframe: pd.DataFrame):
-    
-    pass

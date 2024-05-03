@@ -52,6 +52,9 @@ def all_stats(message):
     mess_text = db.show_perfomance_stats(risk_per_deal=config["deal_config"]["deal_risk_perc_of_bank"], 
                                          initial_bank=config["general"]["initial_bank_for_test_stats"])
     bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats(risk_per_deal=0.05, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
 
 
 def check_pair(bot, chat_id, pair: str):
