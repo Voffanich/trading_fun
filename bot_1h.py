@@ -45,14 +45,30 @@ cd = Cooldown(config['deal_config'], db, bot, chat_id, reverse=reverse)
 @bot.message_handler(commands=['active_deals'])
 def active_deals(message):
     mess_text = db.get_active_deals_stats()
-    bot.send_message(message.chat.id, text=mess_text)
+    if mess_text:
+        bot.send_message(message.chat.id, text=mess_text)
+    else:
+        mess_text = 'No active deals found'
+        bot.send_message(message.chat.id, text=mess_text)
 
 @bot.message_handler(commands=['all_stats'])
 def all_stats(message):
     mess_text = db.show_perfomance_stats(risk_per_deal=config["deal_config"]["deal_risk_perc_of_bank"], 
                                          initial_bank=config["general"]["initial_bank_for_test_stats"])
     bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats(risk_per_deal=0.03, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats(risk_per_deal=0.04, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
     mess_text = db.show_perfomance_stats(risk_per_deal=0.05, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats_adj(best_price_perc_threshold=1.0, trailing_stop_perc=0.35, risk_per_deal=0.03, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats_adj2(best_price_perc_threshold=1, trailing_stop_perc=0.3, risk_per_deal=0.03, 
                                          initial_bank=config["general"]["initial_bank_for_test_stats"])
     bot.send_message(message.chat.id, text=mess_text)
 

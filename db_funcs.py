@@ -428,8 +428,171 @@ ID: {deal[0]}
         
         return message_text
     
+    def show_perfomance_stats_adj(self, best_price_perc_threshold: float, risk_per_deal: float, 
+                                  conditions: list = None, initial_bank: int = 100, trailing_stop_perc: float = 0.3):
+        
+        bank = initial_bank
+        risk = risk_per_deal
+        restrictions = 'WHERE'
+        
+        if conditions:        
+            counter = 0
+        
+            for condition in conditions:
+                if counter > 0:
+                    restrictions += ' AND'
+                
+                restrictions += f' {condition}'
+                counter += 1
+        
+        query = f"""
+        SELECT datetime, pair, direction, take_dist_perc, stop_dist_perc, status, finish_time, profit_loss, best_price_perc, deal_id FROM deals
+        {restrictions} status <> "active"
+        ORDER BY finish_time
+        """
+        loss_counter = 0
+        win_counter = 0
+        win_perc_counter = 0
+        
+        try:    
+            self.cursor.execute(query)
+            deals = self.cursor.fetchall()
+            self.connection.commit()  
+            
+            for deal in deals:
+                if deal[5] == 'win':
+                    bank += bank * risk * deal[7]
+                    win_counter += 1
+                    win_perc_counter += risk * deal[7]
+                    print(f'Win, bank = {bank}')
+                elif deal[5] == 'loss':
+                    if deal[8] <= deal[4] * best_price_perc_threshold:
+                        bank -= bank * risk
+                        loss_counter += 1
+                        print(f'Loss, bank = {bank}')
+                    else:
+                        bank += bank * risk * (best_price_perc_threshold - trailing_stop_perc)
+                        win_counter += 1
+                        win_perc_counter += risk * (best_price_perc_threshold - trailing_stop_perc)
+                        print(f'!!! {deal[9]} Win, bank = {bank}')
+            
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+        
+        average_profit_abs = round((bank - initial_bank) / len(deals), 2)
+        # average_profit_rel = round(((bank - initial_bank) / len(deals))/bank * 100, 2)
+        average_profit_rel_adj = round((win_perc_counter + loss_counter * risk * -1)/len(deals) * 100, 2)
+        
+        message_text = f"""\n
+С трейлинг-стопом {best_price_perc_threshold} / {trailing_stop_perc} от точки трейлинг-стопа        
+
+Стартовый банк: {initial_bank}
+Конечный банк: {round(bank, 2)}
+Риск на сделку: {risk}
+Сделок: {len(deals)}
+Прибыльных/убыточных сделок: {win_counter}/{loss_counter}
+Средняя прибыль на сделку абсолютная: {average_profit_abs}
+Средняя прибыль на сделку %: {average_profit_rel_adj}
+        """
+        
+        return message_text
+    
+    
+    def show_perfomance_stats_adj2(self, best_price_perc_threshold: float, risk_per_deal: float, 
+                                  conditions: list = None, initial_bank: int = 100, trailing_stop_perc: float = 0.3):
+        
+        bank = initial_bank
+        risk = risk_per_deal
+        restrictions = 'WHERE'
+        
+        if conditions:        
+            counter = 0
+        
+            for condition in conditions:
+                if counter > 0:
+                    restrictions += ' AND'
+                
+                restrictions += f' {condition}'
+                counter += 1
+        
+        query = f"""
+        SELECT datetime, pair, direction, take_dist_perc, stop_dist_perc, status, finish_time, profit_loss, best_price_perc, deal_id FROM deals
+        {restrictions} status <> "active"
+        ORDER BY finish_time
+        """
+        loss_counter = 0
+        win_counter = 0
+        win_perc_counter = 0
+        
+        try:    
+            self.cursor.execute(query)
+            deals = self.cursor.fetchall()
+            self.connection.commit()  
+            
+            for deal in deals:
+                if deal[5] == 'win':
+                    bank += bank * risk * deal[7]
+                    win_counter += 1
+                    win_perc_counter += risk * deal[7]
+                    print(f'Win, bank = {bank}')
+                elif deal[5] == 'loss':
+                    if deal[8] <= deal[4] * best_price_perc_threshold:
+                        bank -= bank * risk
+                        loss_counter += 1
+                        print(f'Loss, bank = {bank}')
+                    else:
+                        # bank += bank * risk * (best_price_perc_threshold - trailing_stop_perc)
+                        bank += bank * risk * (deal[8] - trailing_stop_perc)
+                        win_counter += 1
+                        win_perc_counter += risk * (deal[8] - trailing_stop_perc)
+                        print(f'!!! {deal[9]} Win, bank = {bank}')
+            
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
+        
+        average_profit_abs = round((bank - initial_bank) / len(deals), 2)
+        # average_profit_rel = round(((bank - initial_bank) / len(deals))/bank * 100, 2)
+        average_profit_rel_adj = round((win_perc_counter + loss_counter * risk * -1)/len(deals) * 100, 2)
+        
+        message_text = f"""\n
+С трейлинг-стопом {best_price_perc_threshold} / {trailing_stop_perc} от лучшей цены        
+
+Стартовый банк: {initial_bank}
+Конечный банк: {round(bank, 2)}
+Риск на сделку: {risk}
+Сделок: {len(deals)}
+Прибыльных/убыточных сделок: {win_counter}/{loss_counter}
+Средняя прибыль на сделку абсолютная: {average_profit_abs}
+Средняя прибыль на сделку %: {average_profit_rel_adj}
+        """
+        
+        return message_text
+    
     
     def show_stats(self, period_start = None, period_finish = None):
         if not period_start and not period_finish:
             message_text = 'Cnfnrf'
         return message_text
+    
+    def get_perfomance_dataframe (self) -> pd.DataFrame:
+        
+        query = f"""
+        SELECT datetime, pair, direction, take_dist_perc, stop_dist_perc, finish_time, worst_price_perc, best_price_perc, profit_loss FROM deals
+        WHERE status <> 'active'
+        ORDER BY finish_time
+        """
+                
+        try:    
+            self.cursor.execute(query)
+            # deals = self.cursor.fetchall()
+            # self.connection.commit()     
+            
+            dataframe = pd.read_sql_query(query, self.connection)   
+            
+            return dataframe    
+            
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error

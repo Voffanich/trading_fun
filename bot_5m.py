@@ -19,13 +19,11 @@ from user_data.credentials import apikey
 
 bot = telebot.TeleBot(apikey)
 
-config = bf.load_config('config.json')
+config = bf.load_config('config_5m.json')
 chat_id = 234637822
 
 db = DB_handler(config["general"]["db_file_name"])
 db.setup()
-
-
 
 pair = "ETHUSDT" # Trading pair
 # pair = "API3USDT" # Trading pair
@@ -39,8 +37,41 @@ limit = config['levels']['candle_depth']  # Limit of candles requested
 basic_candle_depth = config['general']['basic_candle_depth'] # number of candles to check for each checked timeframe
 deal_config = config['deal_config']     # config for deal estimation
 reverse = deal_config['cool_down_reverse']      # config of counting lost deals reverse or direct
-   
-cd = Cooldown(config['deal_config'], db, bot, chat_id, reverse=reverse)
+
+cd = Cooldown(config['deal_config'], db, bot, chat_id, reverse=reverse)   
+
+
+
+@bot.message_handler(commands=['active_deals'])
+def active_deals(message):
+    mess_text = db.get_active_deals_stats()
+    if mess_text:
+        bot.send_message(message.chat.id, text=mess_text)
+    else:
+        mess_text = 'No active deals found'
+        bot.send_message(message.chat.id, text=mess_text)
+
+@bot.message_handler(commands=['all_stats'])
+def all_stats(message):
+    mess_text = db.show_perfomance_stats(risk_per_deal=config["deal_config"]["deal_risk_perc_of_bank"], 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats(risk_per_deal=0.03, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats(risk_per_deal=0.04, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats(risk_per_deal=0.05, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats_adj(best_price_perc_threshold=1, trailing_stop_perc=0.3, risk_per_deal=0.03, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+    mess_text = db.show_perfomance_stats_adj2(best_price_perc_threshold=1, trailing_stop_perc=0.3, risk_per_deal=0.03, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+    bot.send_message(message.chat.id, text=mess_text)
+
 
 def check_pair(bot, chat_id, pair: str):
 
@@ -145,7 +176,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
                 continue
             
     elif minute_flag:
-        bf.check_active_deals(db, cd, bot, chat_id, reverse)
+        bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
         
             
                 

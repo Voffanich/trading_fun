@@ -112,8 +112,25 @@
 -- SELECT count(*) FROM deals
 -- WHERE status = 'active' AND pair = 'LINAUSDT'
 
-SELECT finish_time FROM deals
-WHERE status = "win" AND strftime("%Y-%m-%d %H:%M:%S", finish_time) > "2023-08-28 07:00:00"
-ORDER BY finish_time
+-- SELECT finish_time FROM deals
+-- WHERE status = "win" AND strftime("%Y-%m-%d %H:%M:%S", finish_time) > "2023-08-28 07:00:00"
+-- ORDER BY finish_time
 
+-- UPDATE deals
+-- SET profit_loss = ROUND((take_dist_perc - 0.04 * 2) / (stop_dist_perc + 0.04 * 2), 2);
 
+-- SELECT pair, direction, profit_loss, take_dist_perc, stop_dist_perc, best_price_perc,
+-- ROUND((take_dist_perc - best_price_perc) / take_dist_perc, 2) as dist_to_take, indicators FROM deals
+-- WHERE status = 'loss';
+
+SELECT COUNT(*) FROM deals
+WHERE ROUND((take_dist_perc - best_price_perc) / take_dist_perc, 2) < 0.4 AND status = 'loss';
+
+SELECT COUNT(*) as bpp_more_than_lp FROM deals
+WHERE best_price_perc > stop_dist_perc AND status = 'loss';
+
+SELECT COUNT(*) as bpp_more_than_1p2_x_lp FROM deals
+WHERE best_price_perc > stop_dist_perc * 1.2 AND status = 'loss';
+
+SELECT COUNT(*) as lost_deals_count FROM deals
+WHERE status = 'loss';

@@ -62,6 +62,7 @@
         "leverage_on": true,
         "max_leverage": 20,
         "deal_comission": 0.04,
+        "comission_count_reverse": false,
 
         "max_one_direction_deals": 10,
         "direction_quantity_diff": 3,

@@ -330,6 +330,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
     last_candle_close = float(last_candle.Close)
     last_candle_open = float(last_candle.Open)
     deal_comission = deal_config['deal_comission']
+    comission_count_reverse = deal_config['comission_count_reverse']
     # print(f'deal_config = {deal_config}')
     
     for level in basic_timeframe_levels: 
@@ -349,7 +350,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             print(f'{take_price=}')
             print(f'{stop_price=}')
             
-            profit_loss_ratio = round(get_profit_loss_ratio(take_price, stop_price, last_candle_close, deal_comission, 10), 2)
+            profit_loss_ratio = round(get_profit_loss_ratio(take_price, stop_price, last_candle_close, deal_comission, comission_count_reverse), 2)
             print(f'{profit_loss_ratio=}')
             
             take_dist_perc: float = round(abs(take_price - last_candle_close) / last_candle_close * 100, 2)
@@ -378,7 +379,7 @@ def check_deal(bot, chat_id, levels: list, last_candle: object, deal_config: dic
             print(f'{take_price=}')
             print(f'{stop_price=}')
     
-            profit_loss_ratio = round(get_profit_loss_ratio(take_price, stop_price, last_candle_close, deal_comission, 10), 2)
+            profit_loss_ratio = round(get_profit_loss_ratio(take_price, stop_price, last_candle_close, deal_comission, comission_count_reverse), 2)
             print(f'{profit_loss_ratio=}')
             
             take_dist_perc: float = round(abs(take_price - last_candle_close) / last_candle_close * 100, 2)
