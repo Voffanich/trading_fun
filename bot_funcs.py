@@ -226,6 +226,7 @@ def send_win_message(bot, chat_id, deal):
     Стоп: {af.r_signif(deal.stop_price, 3)}
     Профит-лосс: {deal.profit_loss_ratio}
     Дистанция до тейка: {deal.take_dist_perc}%
+    Лучшая позиция: {deal.best_price_perc}%
     Дистанция до стопа: {deal.stop_dist_perc}%
     """
     
@@ -246,6 +247,7 @@ def send_loss_message(bot, chat_id, deal):
     Стоп: {af.r_signif(deal.stop_price, 3)}
     Профит-лосс: {deal.profit_loss_ratio}
     Дистанция до тейка: {deal.take_dist_perc}%
+    Лучшая позиция: {deal.best_price_perc}%
     Дистанция до стопа: {deal.stop_dist_perc}%
     """
     

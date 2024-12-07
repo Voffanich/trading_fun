@@ -1,0 +1,58 @@
+Date : 2024-11-29 17:37:59
+Directory : e:\VB\trading_fun
+Total : 26 files,  13891 codes, 571 comments, 661 blanks, all 15123 lines
+
+Languages
++------------------+------------+------------+------------+------------+------------+
+| language         | files      | code       | comment    | blank      | total      |
++------------------+------------+------------+------------+------------+------------+
+| XML              |          1 |      6,524 |        168 |          1 |      6,693 |
+| Database         |          2 |      2,830 |          0 |          0 |      2,830 |
+| CSV              |          2 |      2,218 |          0 |          2 |      2,220 |
+| Python           |         12 |      1,547 |        146 |        537 |      2,230 |
+| JSON             |          3 |        438 |          0 |          9 |        447 |
+| SQLite           |          3 |        217 |        250 |         97 |        564 |
+| pip requirements |          1 |         76 |          0 |          0 |         76 |
+| Markdown         |          1 |         36 |          0 |          9 |         45 |
+| Docker           |          1 |          5 |          7 |          6 |         18 |
++------------------+------------+------------+------------+------------+------------+
+
+Directories
++----------------------------------------+------------+------------+------------+------------+------------+
+| path                                   | files      | code       | comment    | blank      | total      |
++----------------------------------------+------------+------------+------------+------------+------------+
+| .                                      |         26 |     13,891 |        571 |        661 |     15,123 |
++----------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++----------------------------------------+------------------+------------+------------+------------+------------+
+| filename                               | language         | code       | comment    | blank      | total      |
++----------------------------------------+------------------+------------+------------+------------+------------+
+| e:\VB\trading_fun\Dockerfile           | Docker           |          5 |          7 |          6 |         18 |
+| e:\VB\trading_fun\README.MD            | Markdown         |         36 |          0 |          9 |         45 |
+| e:\VB\trading_fun\aux_funcs.py         | Python           |         21 |          0 |          4 |         25 |
+| e:\VB\trading_fun\bnc copy.py          | Python           |         80 |         14 |         25 |        119 |
+| e:\VB\trading_fun\bnc.py               | Python           |         14 |         12 |          8 |         34 |
+| e:\VB\trading_fun\bot_1h.py            | Python           |        137 |         15 |         50 |        202 |
+| e:\VB\trading_fun\bot_5m.py            | Python           |        150 |         15 |         56 |        221 |
+| e:\VB\trading_fun\bot_funcs.py         | Python           |        261 |          5 |         93 |        359 |
+| e:\VB\trading_fun\config_1h.json       | JSON             |         83 |          0 |          4 |         87 |
+| e:\VB\trading_fun\config_5m.json       | JSON             |         83 |          0 |          4 |         87 |
+| e:\VB\trading_fun\cooldown.py          | Python           |         56 |          0 |         31 |         87 |
+| e:\VB\trading_fun\db_funcs.py          | Python           |        466 |         12 |        121 |        599 |
+| e:\VB\trading_fun\deals_1h.sqlite      | Database         |        838 |          0 |          0 |        838 |
+| e:\VB\trading_fun\deals_5m.csv         | CSV              |        786 |          0 |          1 |        787 |
+| e:\VB\trading_fun\deals_5m.sqlite      | Database         |      1,992 |          0 |          0 |      1,992 |
+| e:\VB\trading_fun\diagrams.py          | Python           |         11 |          5 |          5 |         21 |
+| e:\VB\trading_fun\export_csv.py        | Python           |         17 |          9 |         10 |         36 |
+| e:\VB\trading_fun\indicators.py        | Python           |          8 |          0 |          6 |         14 |
+| e:\VB\trading_fun\levels.py            | Python           |        326 |         59 |        128 |        513 |
+| e:\VB\trading_fun\requirements.txt     | pip requirements |         76 |          0 |          0 |         76 |
+| e:\VB\trading_fun\seaborn_plot.svg     | XML              |      6,524 |        168 |          1 |      6,693 |
+| e:\VB\trading_fun\sql_queries.sql      | SQLite           |         28 |         72 |         20 |        120 |
+| e:\VB\trading_fun\sql_queries_2.sql    | SQLite           |        181 |         77 |         50 |        308 |
+| e:\VB\trading_fun\sql_queries_3.sql    | SQLite           |          8 |        101 |         27 |        136 |
+| e:\VB\trading_fun\stats 2023-07-04.csv | CSV              |      1,432 |          0 |          1 |      1,433 |
+| e:\VB\trading_fun\test.ipynb           | JSON             |        272 |          0 |          1 |        273 |
+| Total                                  |                  |     13,891 |        571 |        661 |     15,123 |
++----------------------------------------+------------------+------------+------------+------------+------------+

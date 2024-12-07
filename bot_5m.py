@@ -154,7 +154,26 @@ def start(message, res=False):
     global chat_id
     chat_id = message.from_user.id
     print(chat_id)
+
+
+@bot.message_handler(content_types=['text'])
+def func(message):
+        
+    if ('as' in message.text or 'AS' in message.text):
+        trailing_threshold = float(message.text.split(' ')[1])
+        trailing_delta = float(message.text.split(' ')[2])
+        
+        mess_text = db.show_perfomance_stats_adj(best_price_perc_threshold=trailing_threshold, trailing_stop_perc=trailing_delta, risk_per_deal=0.03, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+        bot.send_message(message.chat.id, text=mess_text)        
+        mess_text = db.show_perfomance_stats_adj2(best_price_perc_threshold=trailing_threshold, trailing_stop_perc=trailing_delta, risk_per_deal=0.03, 
+                                         initial_bank=config["general"]["initial_bank_for_test_stats"])
+        bot.send_message(message.chat.id, text=mess_text)   
     
+    elif (message.text == ''):
+        pass    
+
+
 
 def main_func(trading_pairs: list, minute_flag: bool):
     

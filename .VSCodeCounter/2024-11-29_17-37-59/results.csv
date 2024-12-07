@@ -1,0 +1,28 @@
+"filename", "language", "SQLite", "XML", "JSON", "pip requirements", "Python", "Docker", "Database", "CSV", "Markdown", "comment", "blank", "total"
+"e:\VB\trading_fun\Dockerfile", "Docker", 0, 0, 0, 0, 0, 5, 0, 0, 0, 7, 6, 18
+"e:\VB\trading_fun\README.MD", "Markdown", 0, 0, 0, 0, 0, 0, 0, 0, 36, 0, 9, 45
+"e:\VB\trading_fun\aux_funcs.py", "Python", 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 4, 25
+"e:\VB\trading_fun\bnc copy.py", "Python", 0, 0, 0, 0, 80, 0, 0, 0, 0, 14, 25, 119
+"e:\VB\trading_fun\bnc.py", "Python", 0, 0, 0, 0, 14, 0, 0, 0, 0, 12, 8, 34
+"e:\VB\trading_fun\bot_1h.py", "Python", 0, 0, 0, 0, 137, 0, 0, 0, 0, 15, 50, 202
+"e:\VB\trading_fun\bot_5m.py", "Python", 0, 0, 0, 0, 150, 0, 0, 0, 0, 15, 56, 221
+"e:\VB\trading_fun\bot_funcs.py", "Python", 0, 0, 0, 0, 261, 0, 0, 0, 0, 5, 93, 359
+"e:\VB\trading_fun\config_1h.json", "JSON", 0, 0, 83, 0, 0, 0, 0, 0, 0, 0, 4, 87
+"e:\VB\trading_fun\config_5m.json", "JSON", 0, 0, 83, 0, 0, 0, 0, 0, 0, 0, 4, 87
+"e:\VB\trading_fun\cooldown.py", "Python", 0, 0, 0, 0, 56, 0, 0, 0, 0, 0, 31, 87
+"e:\VB\trading_fun\db_funcs.py", "Python", 0, 0, 0, 0, 466, 0, 0, 0, 0, 12, 121, 599
+"e:\VB\trading_fun\deals_1h.sqlite", "Database", 0, 0, 0, 0, 0, 0, 838, 0, 0, 0, 0, 838
+"e:\VB\trading_fun\deals_5m.csv", "CSV", 0, 0, 0, 0, 0, 0, 0, 786, 0, 0, 1, 787
+"e:\VB\trading_fun\deals_5m.sqlite", "Database", 0, 0, 0, 0, 0, 0, 1992, 0, 0, 0, 0, 1992
+"e:\VB\trading_fun\diagrams.py", "Python", 0, 0, 0, 0, 11, 0, 0, 0, 0, 5, 5, 21
+"e:\VB\trading_fun\export_csv.py", "Python", 0, 0, 0, 0, 17, 0, 0, 0, 0, 9, 10, 36
+"e:\VB\trading_fun\indicators.py", "Python", 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 6, 14
+"e:\VB\trading_fun\levels.py", "Python", 0, 0, 0, 0, 326, 0, 0, 0, 0, 59, 128, 513
+"e:\VB\trading_fun\requirements.txt", "pip requirements", 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 76
+"e:\VB\trading_fun\seaborn_plot.svg", "XML", 0, 6524, 0, 0, 0, 0, 0, 0, 0, 168, 1, 6693
+"e:\VB\trading_fun\sql_queries.sql", "SQLite", 28, 0, 0, 0, 0, 0, 0, 0, 0, 72, 20, 120
+"e:\VB\trading_fun\sql_queries_2.sql", "SQLite", 181, 0, 0, 0, 0, 0, 0, 0, 0, 77, 50, 308
+"e:\VB\trading_fun\sql_queries_3.sql", "SQLite", 8, 0, 0, 0, 0, 0, 0, 0, 0, 101, 27, 136
+"e:\VB\trading_fun\stats 2023-07-04.csv", "CSV", 0, 0, 0, 0, 0, 0, 0, 1432, 0, 0, 1, 1433
+"e:\VB\trading_fun\test.ipynb", "JSON", 0, 0, 272, 0, 0, 0, 0, 0, 0, 0, 1, 273
+"Total", "-", 217, 6524, 438, 76, 1547, 5, 2830, 2218, 36, 571, 661, 15123

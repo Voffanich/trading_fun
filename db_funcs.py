@@ -333,7 +333,7 @@ class DB_handler():
         
         query = """
             SELECT deal_id, datetime, pair, timeframe, direction, profit_loss, take_dist_perc, stop_dist_perc, current_price_perc,
-            entry_price, current_price, take_price, stop_price FROM deals
+            entry_price, current_price, take_price, stop_price, best_price_perc FROM deals
             WHERE status = 'active'
             ORDER BY datetime DESC
             """
@@ -352,6 +352,7 @@ ID: {deal[0]}
 Профит-лосс: {deal[5]}
 Расстояние до тейка %: {deal[6]}
 Текущая позиция %: {deal[8]}
+Лучшая позиция %: {deal[13]}
 Расстояние до стопа %: {deal[7]}
 
 Цена входа: {deal[9]}

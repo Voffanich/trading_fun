@@ -123,14 +123,23 @@
 -- ROUND((take_dist_perc - best_price_perc) / take_dist_perc, 2) as dist_to_take, indicators FROM deals
 -- WHERE status = 'loss';
 
+-- SELECT COUNT(*) FROM deals
+-- WHERE ROUND((take_dist_perc - best_price_perc) / take_dist_perc, 2) < 0.4 AND status = 'loss';
+
+-- SELECT COUNT(*) as bpp_more_than_lp FROM deals
+-- WHERE best_price_perc > stop_dist_perc AND status = 'loss';
+
+-- SELECT COUNT(*) as bpp_more_than_1p2_x_lp FROM deals
+-- WHERE best_price_perc > stop_dist_perc * 1.2 AND status = 'loss';
+
+-- SELECT COUNT(*) as lost_deals_count FROM deals
+-- WHERE status = 'loss';
+
 SELECT COUNT(*) FROM deals
-WHERE ROUND((take_dist_perc - best_price_perc) / take_dist_perc, 2) < 0.4 AND status = 'loss';
+WHERE best_price_perc > 0.1 AND worst_price_perc > 0.1;
 
-SELECT COUNT(*) as bpp_more_than_lp FROM deals
-WHERE best_price_perc > stop_dist_perc AND status = 'loss';
+SELECT COUNT(*) FROM deals
+WHERE best_price_perc > 0.2 AND worst_price_perc > 0.2;
 
-SELECT COUNT(*) as bpp_more_than_1p2_x_lp FROM deals
-WHERE best_price_perc > stop_dist_perc * 1.2 AND status = 'loss';
+SELECT COUNT(*) FROM deals;
 
-SELECT COUNT(*) as lost_deals_count FROM deals
-WHERE status = 'loss';
