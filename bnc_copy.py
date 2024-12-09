@@ -1,6 +1,9 @@
 from binance.client import Client
 from binance.enums import *
 from binance.exceptions import BinanceAPIException, BinanceOrderException
+from binance.um_futures import UMFutures
+from binance.lib.utils import config_logging
+from binance.error import ClientError
 import requests
 import time
 import hmac
@@ -15,18 +18,30 @@ class Binance_adapter():
         self.API_KEY = api_key
         self.API_SECRET = api_secret
         self.SUBACCOUNT_EMAIL = subaccount_email
-        self.BASE_URL = 'https://api.binance.com'
+        # self.BASE_URL = 'https://fapi.binance.com'
         # self.ENDPOINT = '/sapi/v1/sub-account/futures/account'
         # self.ENDPOINT = '/sapi/v1/sub-account/futures/assets'
-        self.ENDPOINT = '/sapi/v1/sub-account/status'
+        # self.ENDPOINT = '/sapi/v1/sub-account/status'
         
+        self.f_client = UMFutures(key = self.API_KEY, secret = self.API_SECRET)
         self.client = Client(self.API_KEY, self.API_SECRET)
 
-    def get_balance(self):
-        acc = self.client.get_margin_account()
-        acc = self.client.futures_account()
-        print(acc)
-       
+    def get_balance_usdt(self):
+        try:
+            response = self.f_client.account()
+            # print(response)
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+            
+        for asset in response['assets']:
+            if asset['asset'] == 'USDT':
+                print(asset['asset'] + ' : ' + asset['walletBalance'])
+                return float(asset['walletBalance'])
+        
     
     def get_symbol_info(self, symbol):
         exchange_info = self.client.futures_exchange_info()
