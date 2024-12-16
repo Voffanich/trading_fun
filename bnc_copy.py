@@ -18,11 +18,7 @@ class Binance_adapter():
         self.API_KEY = api_key
         self.API_SECRET = api_secret
         self.SUBACCOUNT_EMAIL = subaccount_email
-        # self.BASE_URL = 'https://fapi.binance.com'
-        # self.ENDPOINT = '/sapi/v1/sub-account/futures/account'
-        # self.ENDPOINT = '/sapi/v1/sub-account/futures/assets'
-        # self.ENDPOINT = '/sapi/v1/sub-account/status'
-        
+                
         self.f_client = UMFutures(key = self.API_KEY, secret = self.API_SECRET)
         self.client = Client(self.API_KEY, self.API_SECRET)
 
@@ -36,16 +32,98 @@ class Binance_adapter():
                     error.status_code, error.error_code, error.error_message
                 )
             )
+        
+        try:    
+            for asset in response['assets']:
+                if asset['asset'] == 'USDT':
+                    print(asset['asset'] + ' : ' + asset['walletBalance'])
+                    return float(asset['walletBalance'])
+        except error as error:
+            print("Some fucking error happened. No USDT balance found")
+            return False
             
-        for asset in response['assets']:
-            if asset['asset'] == 'USDT':
-                print(asset['asset'] + ' : ' + asset['walletBalance'])
-                return float(asset['walletBalance'])
+    
+    def set_leverage(self, pair, leverage):
+        try:
+            response = self.f_client.change_leverage(symbol=pair, leverage=leverage, recvWindow=6000)
+            print(response)
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )    
+        finally:
+            return False
+            
+    def get_price_precision(self, pair):
+        try:
+            response = self.f_client.exchange_info()['symbols']
+            for element in response:
+                if element['symbol'] == pair:
+                    print(f'Price presision for {pair} is {element["pricePrecision"]}')
+                    return element['pricePrecision']
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+        finally:
+            return False  
         
     
-    def get_symbol_info(self, symbol):
-        exchange_info = self.client.futures_exchange_info()
-        return next((item for item in exchange_info['symbols'] if item['symbol'] == symbol), None)
+    def get_quantity_precision(self, pair):
+        try:
+            response = self.f_client.exchange_info()['symbols']
+            for element in response:
+                if element['symbol'] == pair:
+                    print(f'Quantity presision for {pair} is {element["quantityPrecision"]}')
+                    return element['quantityPrecision']
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+        finally:
+            return False 
+        
+        
+    def get_minimum_quantity(self, pair):
+        try:
+            response = self.f_client.exchange_info()['symbols']
+            for element in response:
+                if element['symbol'] == pair:
+                    print(f'Minimum quantity for {pair} is {element["filters"][2]["minQty"]}')
+                    return element['filters'][2]['minQty']
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+        finally:
+            return False 
+        
+    
+    def get_step_size(self, pair):
+        try:
+            response = self.f_client.exchange_info()['symbols']
+            for element in response:
+                if element['symbol'] == pair:
+                    print(f'Step size for {pair} is {element["filters"][2]["stepSize"]}')
+                    return element['filters'][2]['stepSize']
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+        finally:
+            return False 
+        
+    
 
 
     def calculate_trade_amount(self, balance, risk_percentage, entry_price, stop_loss_price, leverage, step_size):
