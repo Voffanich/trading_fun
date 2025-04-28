@@ -16,8 +16,9 @@ def calculate_position_size(balance, max_loss_percent, entry_price, stop_price, 
     else:  # short
         price_diff = stop_price - entry_price
     
-    max_loss_amount = balance * (max_loss_percent / 100)
-    position_size = max_loss_amount / (price_diff / entry_price)
+    # Рассчитываем размер позиции так, чтобы при достижении стопа
+    # убыток составлял ровно max_loss_percent от баланса
+    position_size = (balance * max_loss_percent / 100) / (price_diff / entry_price)
     return position_size
 
 def calculate_trailing_stop(entry_price, stop_price, take_price, current_price, 
@@ -78,25 +79,34 @@ def calculate_deal_result(row, params):
         if status == 'win':
             exit_price = take_price
         elif best_price >= (entry_price + (entry_price - stop_price) * params['trailing_activation']):
-            exit_price = trailing_stop
+            # Для лонга: цена выхода = цена активации - дистанция трейлинг-стопа
+            exit_price = best_price - (best_price - trailing_stop)
         else:
             exit_price = stop_price
     else:  # short
         if status == 'win':
             exit_price = take_price
         elif best_price <= (entry_price - (stop_price - entry_price) * params['trailing_activation']):
-            exit_price = trailing_stop
+            # Для шорта: цена выхода = цена активации + дистанция трейлинг-стопа
+            exit_price = best_price + (trailing_stop - best_price)
         else:
             exit_price = stop_price
     
-    # Рассчитываем прибыль/убыток
+    # Рассчитываем прибыль/убыток в процентах от баланса
     if direction == 'long':
-        profit = (exit_price - entry_price) / entry_price * position_size
+        price_diff = exit_price - entry_price
     else:
-        profit = (entry_price - exit_price) / entry_price * position_size
+        price_diff = entry_price - exit_price
+    
+    # Прибыль/убыток в процентах от баланса
+    profit_percent = (price_diff / entry_price) * (position_size / params['initial_balance'] * 100)
+    
+    # Конвертируем проценты в абсолютное значение
+    profit = profit_percent * params['initial_balance'] / 100
     
     # Вычитаем комиссии
-    profit = profit - (position_size * (params['entry_commission'] + params['exit_commission']) / 100)
+    commission = position_size * (params['entry_commission'] + params['exit_commission']) / 100
+    profit = profit - commission
     
     return profit, position_size, stop_percent, take_percent
 
@@ -107,10 +117,122 @@ def calculate_equity_curve(df, params):
     dates = [df.iloc[0]['datetime']]
     deals = []
     
-    for _, row in df.iterrows():
-        profit, position_size, stop_percent, take_percent = calculate_deal_result(row, params)
+    print("\n=== Подробный расчет первых 50 сделок ===\n")
+    print(f"Начальный баланс: {balance} USDT")
+    print(f"Максимальный убыток: {params['max_loss_percent']}%")
+    print(f"Трейлинг активация: {params['trailing_activation']}")
+    print(f"Трейлинг дистанция: {params['trailing_distance']}")
+    print(f"Комиссия вход/выход: {params['entry_commission']}%/{params['exit_commission']}%\n")
+    
+    for i, (_, row) in enumerate(df.iterrows()):
+        # Рассчитываем размер позиции на основе текущего баланса
+        position_size = calculate_position_size(
+            balance,
+            params['max_loss_percent'],
+            row['entry_price'],
+            row['stop_price'],
+            row['direction']
+        )
+        
+        # Рассчитываем проценты движения цены
+        if row['direction'] == 'long':
+            stop_percent = (row['entry_price'] - row['stop_price']) / row['entry_price'] * 100
+            take_percent = (row['take_price'] - row['entry_price']) / row['entry_price'] * 100
+        else:  # short
+            stop_percent = (row['stop_price'] - row['entry_price']) / row['entry_price'] * 100
+            take_percent = (row['entry_price'] - row['take_price']) / row['entry_price'] * 100
+        
+        # Рассчитываем трейлинг-стоп
+        trailing_stop = calculate_trailing_stop(
+            row['entry_price'], row['stop_price'], row['take_price'], row['best_price'],
+            params['trailing_activation'], params['trailing_distance'], row['direction']
+        )
+        
+        # Определяем точку выхода
+        if row['direction'] == 'long':
+            if row['status'] == 'win':
+                exit_price = row['take_price']
+            else:
+                # Для лонга: цена выхода = цена активации - дистанция трейлинг-стопа
+                activation_price = row['entry_price'] + (row['entry_price'] - row['stop_price']) * params['trailing_activation']
+                if row['best_price'] >= activation_price:
+                    # Если трейлинг-стоп активирован, используем его цену выхода
+                    exit_price = activation_price - (activation_price - trailing_stop)
+                else:
+                    # Если трейлинг-стоп не активирован, используем стоп-лосс
+                    exit_price = row['stop_price']
+        else:  # short
+            if row['status'] == 'win':
+                exit_price = row['take_price']
+            else:
+                # Для шорта: цена выхода = цена активации + дистанция трейлинг-стопа
+                activation_price = row['entry_price'] - (row['stop_price'] - row['entry_price']) * params['trailing_activation']
+                if row['best_price'] <= activation_price:
+                    # Если трейлинг-стоп активирован, используем его цену выхода
+                    exit_price = activation_price + (trailing_stop - activation_price)
+                else:
+                    # Если трейлинг-стоп не активирован, используем стоп-лосс
+                    exit_price = row['stop_price']
+        
+        # Рассчитываем прибыль/убыток
+        if row['direction'] == 'long':
+            price_diff = exit_price - row['entry_price']
+        else:
+            price_diff = row['entry_price'] - exit_price
+        
+        profit_percent = (price_diff / row['entry_price']) * (position_size / balance * 100)
+        profit = profit_percent * balance / 100
+        
+        # Вычитаем комиссии
+        commission = position_size * (params['entry_commission'] + params['exit_commission']) / 100
+        profit = profit - commission
+        
+        # Сохраняем старый баланс для вывода
+        old_balance = balance
+        
+        # Обновляем баланс
         balance += profit
         
+        # Выводим в терминал только первые 50 сделок
+        if i < 50:
+            print(f"\nСделка #{i+1}")
+            print(f"Дата: {row['datetime']}")
+            print(f"Пара: {row['pair']}")
+            print(f"Направление: {row['direction']}")
+            print(f"Вход: {row['entry_price']}")
+            print(f"Стоп: {row['stop_price']}")
+            print(f"Тейк: {row['take_price']}")
+            print(f"Лучшая цена: {row['best_price']}")
+            print(f"Статус: {row['status']}")
+            print(f"Текущий баланс: {old_balance} USDT")
+            print(f"Размер позиции: {round(position_size, 2)} USDT")
+            print(f"% до стопа: {round(stop_percent, 2)}%")
+            print(f"% до тейка: {round(take_percent, 2)}%")
+            
+            # Выводим информацию о трейлинг-стопе
+            if row['direction'] == 'long':
+                activation_price = row['entry_price'] + (row['entry_price'] - row['stop_price']) * params['trailing_activation']
+                print(f"Цена активации трейлинг-стопа: {activation_price}")
+                if row['best_price'] >= activation_price:
+                    print(f"Цена срабатывания трейлинг-стопа: {activation_price - (activation_price - trailing_stop)}")
+                else:
+                    print("Трейлинг-стоп не активирован")
+            else:  # short
+                activation_price = row['entry_price'] - (row['stop_price'] - row['entry_price']) * params['trailing_activation']
+                print(f"Цена активации трейлинг-стопа: {activation_price}")
+                if row['best_price'] <= activation_price:
+                    print(f"Цена срабатывания трейлинг-стопа: {activation_price + (trailing_stop - activation_price)}")
+                else:
+                    print("Трейлинг-стоп не активирован")
+            
+            print(f"Цена выхода: {exit_price}")
+            print(f"Прибыль/убыток: {round(profit, 2)} USDT ({round(profit_percent, 2)}% от баланса)")
+            print(f"Комиссии: {round(commission, 2)} USDT")
+            print(f"Чистая прибыль/убыток: {round(profit, 2)} USDT")
+            print(f"Новый баланс: {round(balance, 2)} USDT")
+            print("-" * 50)
+        
+        # Сохраняем данные для всех сделок
         deals.append({
             'datetime': row['datetime'],
             'pair': row['pair'],
@@ -144,10 +266,66 @@ def calculate_statistics(df, params):
     stats['loss_percent'] = round(stats['loss_deals'] / stats['total_deals'] * 100, 2) if stats['total_deals'] > 0 else 0
     
     # Прибыль/убыток
+    balance = params['initial_balance']
     profits = []
     for _, row in df.iterrows():
-        profit, _, _, _ = calculate_deal_result(row, params)
+        # Рассчитываем размер позиции на основе текущего баланса
+        position_size = calculate_position_size(
+            balance,
+            params['max_loss_percent'],
+            row['entry_price'],
+            row['stop_price'],
+            row['direction']
+        )
+        
+        # Рассчитываем проценты движения цены
+        if row['direction'] == 'long':
+            stop_percent = (row['entry_price'] - row['stop_price']) / row['entry_price'] * 100
+            take_percent = (row['take_price'] - row['entry_price']) / row['entry_price'] * 100
+        else:  # short
+            stop_percent = (row['stop_price'] - row['entry_price']) / row['entry_price'] * 100
+            take_percent = (row['entry_price'] - row['take_price']) / row['entry_price'] * 100
+        
+        # Рассчитываем трейлинг-стоп
+        trailing_stop = calculate_trailing_stop(
+            row['entry_price'], row['stop_price'], row['take_price'], row['best_price'],
+            params['trailing_activation'], params['trailing_distance'], row['direction']
+        )
+        
+        # Определяем точку выхода
+        if row['direction'] == 'long':
+            if row['status'] == 'win':
+                exit_price = row['take_price']
+            elif row['best_price'] >= (row['entry_price'] + (row['entry_price'] - row['stop_price']) * params['trailing_activation']):
+                exit_price = trailing_stop
+            else:
+                exit_price = row['stop_price']
+        else:  # short
+            if row['status'] == 'win':
+                exit_price = row['take_price']
+            elif row['best_price'] <= (row['entry_price'] - (row['stop_price'] - row['entry_price']) * params['trailing_activation']):
+                exit_price = trailing_stop
+            else:
+                exit_price = row['stop_price']
+        
+        # Рассчитываем прибыль/убыток в процентах от текущего баланса
+        if row['direction'] == 'long':
+            price_diff = exit_price - row['entry_price']
+        else:
+            price_diff = row['entry_price'] - exit_price
+        
+        # Прибыль/убыток в процентах от баланса
+        profit_percent = (price_diff / row['entry_price']) * (position_size / balance * 100)
+        
+        # Конвертируем проценты в абсолютное значение
+        profit = profit_percent * balance / 100
+        
+        # Вычитаем комиссии
+        commission = position_size * (params['entry_commission'] + params['exit_commission']) / 100
+        profit = profit - commission
+        
         profits.append(profit)
+        balance += profit
     
     stats['avg_profit'] = round(sum(profits) / len(profits), 2) if profits else 0
     stats['max_profit'] = round(max(profits), 2) if profits else 0
@@ -155,7 +333,7 @@ def calculate_statistics(df, params):
     
     # Финансовые показатели
     stats['initial_balance'] = params['initial_balance']
-    stats['final_balance'] = params['initial_balance'] + sum(profits)
+    stats['final_balance'] = balance
     stats['total_profit'] = round(sum(profits), 2)
     stats['roi'] = round((stats['final_balance'] / stats['initial_balance'] - 1) * 100, 2)
     
@@ -190,6 +368,8 @@ def calculate_statistics(df, params):
 def calculate_pair_statistics(df, params):
     """Рассчитывает статистику по торговым парам"""
     pair_stats = []
+    balance = params['initial_balance']
+    
     for pair in df['pair'].unique():
         pair_df = df[df['pair'] == pair]
         
@@ -204,8 +384,63 @@ def calculate_pair_statistics(df, params):
         
         profits = []
         for _, row in pair_df.iterrows():
-            profit, _, _, _ = calculate_deal_result(row, params)
+            # Рассчитываем размер позиции на основе текущего баланса
+            position_size = calculate_position_size(
+                balance,
+                params['max_loss_percent'],
+                row['entry_price'],
+                row['stop_price'],
+                row['direction']
+            )
+            
+            # Рассчитываем проценты движения цены
+            if row['direction'] == 'long':
+                stop_percent = (row['entry_price'] - row['stop_price']) / row['entry_price'] * 100
+                take_percent = (row['take_price'] - row['entry_price']) / row['entry_price'] * 100
+            else:  # short
+                stop_percent = (row['stop_price'] - row['entry_price']) / row['entry_price'] * 100
+                take_percent = (row['entry_price'] - row['take_price']) / row['entry_price'] * 100
+            
+            # Рассчитываем трейлинг-стоп
+            trailing_stop = calculate_trailing_stop(
+                row['entry_price'], row['stop_price'], row['take_price'], row['best_price'],
+                params['trailing_activation'], params['trailing_distance'], row['direction']
+            )
+            
+            # Определяем точку выхода
+            if row['direction'] == 'long':
+                if row['status'] == 'win':
+                    exit_price = row['take_price']
+                elif row['best_price'] >= (row['entry_price'] + (row['entry_price'] - row['stop_price']) * params['trailing_activation']):
+                    exit_price = trailing_stop
+                else:
+                    exit_price = row['stop_price']
+            else:  # short
+                if row['status'] == 'win':
+                    exit_price = row['take_price']
+                elif row['best_price'] <= (row['entry_price'] - (row['stop_price'] - row['entry_price']) * params['trailing_activation']):
+                    exit_price = trailing_stop
+                else:
+                    exit_price = row['stop_price']
+            
+            # Рассчитываем прибыль/убыток в процентах от текущего баланса
+            if row['direction'] == 'long':
+                price_diff = exit_price - row['entry_price']
+            else:
+                price_diff = row['entry_price'] - exit_price
+            
+            # Прибыль/убыток в процентах от баланса
+            profit_percent = (price_diff / row['entry_price']) * (position_size / balance * 100)
+            
+            # Конвертируем проценты в абсолютное значение
+            profit = profit_percent * balance / 100
+            
+            # Вычитаем комиссии
+            commission = position_size * (params['entry_commission'] + params['exit_commission']) / 100
+            profit = profit - commission
+            
             profits.append(profit)
+            balance += profit
         
         stats['avg_profit'] = round(sum(profits) / len(profits), 2) if profits else 0
         stats['total_profit'] = round(sum(profits), 2)
@@ -214,33 +449,33 @@ def calculate_pair_statistics(df, params):
     
     return sorted(pair_stats, key=lambda x: x['total_profit'], reverse=True)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET'])
 def index():
     # Параметры по умолчанию
     params = {
-        'database': 'deals_1h.sqlite',
+        'database': 'deals_5m.sqlite',
         'initial_balance': 1000,
-        'max_loss_percent': 1.0,
-        'trailing_activation': 0.5,
-        'trailing_distance': 0.3,
-        'entry_commission': 0.1,
-        'exit_commission': 0.1
+        'max_loss_percent': 3.0,
+        'trailing_activation': 0.8,
+        'trailing_distance': 0.2,
+        'entry_commission': 0.05,
+        'exit_commission': 0.05
     }
+    
+    # Получаем параметры из GET-запроса
+    if request.method == 'GET':
+        params.update({
+            'database': request.args.get('database', 'deals_1h.sqlite'),
+            'max_loss_percent': float(request.args.get('max_loss_percent', 1.0)),
+            'trailing_activation': float(request.args.get('trailing_activation', 0.5)),
+            'trailing_distance': float(request.args.get('trailing_distance', 0.3)),
+            'entry_commission': float(request.args.get('entry_commission', 0.1)),
+            'exit_commission': float(request.args.get('exit_commission', 0.1))
+        })
     
     # Получаем номер страницы
     page = int(request.args.get('page', 1))
     per_page = 100
-    
-    if request.method == 'POST':
-        params = {
-            'database': request.form.get('database', 'deals_1h.sqlite'),
-            'initial_balance': 1000,
-            'max_loss_percent': float(request.form.get('max_loss_percent', 1.0)),
-            'trailing_activation': float(request.form.get('trailing_activation', 0.5)),
-            'trailing_distance': float(request.form.get('trailing_distance', 0.3)),
-            'entry_commission': float(request.form.get('entry_commission', 0.1)),
-            'exit_commission': float(request.form.get('exit_commission', 0.1))
-        }
     
     # Загружаем данные из выбранной базы
     try:

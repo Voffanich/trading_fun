@@ -20,7 +20,7 @@
         
         <div class="row">
             <div class="col-md-4">
-                <form method="POST" class="mb-4">
+                <form method="GET" class="mb-4">
                     <div class="mb-3">
                         <label for="database" class="form-label">База данных</label>
                         <select class="form-select" id="database" name="database">
@@ -194,7 +194,7 @@
                     <ul class="pagination justify-content-center">
                         {% if page > 1 %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page - 1 }}">Предыдущая</a>
+                            <a class="page-link" href="?page={{ page - 1 }}&database={{ params.database }}&max_loss_percent={{ params.max_loss_percent }}&trailing_activation={{ params.trailing_activation }}&trailing_distance={{ params.trailing_distance }}&entry_commission={{ params.entry_commission }}&exit_commission={{ params.exit_commission }}">Предыдущая</a>
                         </li>
                         {% endif %}
                         
@@ -205,14 +205,14 @@
                             </li>
                             {% else %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ p }}">{{ p }}</a>
+                                <a class="page-link" href="?page={{ p }}&database={{ params.database }}&max_loss_percent={{ params.max_loss_percent }}&trailing_activation={{ params.trailing_activation }}&trailing_distance={{ params.trailing_distance }}&entry_commission={{ params.entry_commission }}&exit_commission={{ params.exit_commission }}">{{ p }}</a>
                             </li>
                             {% endif %}
                         {% endfor %}
                         
                         {% if page < total_pages %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page + 1 }}">Следующая</a>
+                            <a class="page-link" href="?page={{ page + 1 }}&database={{ params.database }}&max_loss_percent={{ params.max_loss_percent }}&trailing_activation={{ params.trailing_activation }}&trailing_distance={{ params.trailing_distance }}&entry_commission={{ params.entry_commission }}&exit_commission={{ params.exit_commission }}">Следующая</a>
                         </li>
                         {% endif %}
                     </ul>
