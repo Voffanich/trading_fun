@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Анализ торговых сделок</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        .graph-container {
+            width: 75%;
+            margin: 0 auto;
+        }
+        .stats-card {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>Анализ торговых сделок</h1>
+        
+        <div class="row">
+            <div class="col-md-4">
+                <form method="POST" class="mb-4">
+                    <div class="mb-3">
+                        <label for="database" class="form-label">База данных</label>
+                        <select class="form-select" id="database" name="database">
+                            <option value="deals_5m.sqlite" {% if params.database == 'deals_5m.sqlite' %}selected{% endif %}>5 минут</option>
+                            <option value="deals_1h.sqlite" {% if params.database == 'deals_1h.sqlite' %}selected{% endif %}>1 час</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="max_loss_percent" class="form-label">Максимальный убыток на сделку (% от банка)</label>
+                        <input type="number" step="0.01" class="form-control" id="max_loss_percent" name="max_loss_percent" value="{{ params.max_loss_percent }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="trailing_activation" class="form-label">Порог активации трейлинг-стопа (коэффициент от SL)</label>
+                        <input type="number" step="0.01" class="form-control" id="trailing_activation" name="trailing_activation" value="{{ params.trailing_activation }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="trailing_distance" class="form-label">Дистанция трейлинг-стопа (коэффициент от SL)</label>
+                        <input type="number" step="0.01" class="form-control" id="trailing_distance" name="trailing_distance" value="{{ params.trailing_distance }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="entry_commission" class="form-label">Комиссия за вход (%)</label>
+                        <input type="number" step="0.01" class="form-control" id="entry_commission" name="entry_commission" value="{{ params.entry_commission }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="exit_commission" class="form-label">Комиссия за выход (%)</label>
+                        <input type="number" step="0.01" class="form-control" id="exit_commission" name="exit_commission" value="{{ params.exit_commission }}">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Обновить график</button>
+                </form>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="graph-container">
+                    <div id="graph"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <h2>Общая статистика</h2>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card stats-card">
+                            <div class="card-body">
+                                <h5 class="card-title">Результаты сделок</h5>
+                                <p class="card-text">
+                                    Всего сделок: {{ stats.total_deals }}<br>
+                                    Прибыльных: {{ stats.win_deals }} ({{ stats.win_percent }}%)<br>
+                                    Убыточных: {{ stats.loss_deals }} ({{ stats.loss_percent }}%)<br>
+                                    Средняя прибыль: {{ stats.avg_profit }}%<br>
+                                    Максимальная прибыль: {{ stats.max_profit }}%<br>
+                                    Максимальный убыток: {{ stats.max_loss }}%
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card stats-card">
+                            <div class="card-body">
+                                <h5 class="card-title">Финансовые показатели</h5>
+                                <p class="card-text">
+                                    Начальный банк: {{ stats.initial_balance }} USDT<br>
+                                    Конечный банк: {{ stats.final_balance }} USDT<br>
+                                    Общая прибыль: {{ stats.total_profit }} USDT<br>
+                                    ROI: {{ stats.roi }}%<br>
+                                    Максимальная просадка: {{ stats.max_drawdown }}%
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card stats-card">
+                            <div class="card-body">
+                                <h5 class="card-title">Направления сделок</h5>
+                                <p class="card-text">
+                                    Лонгов: {{ stats.long_deals }} ({{ stats.long_win_percent }}% прибыльных)<br>
+                                    Шортов: {{ stats.short_deals }} ({{ stats.short_win_percent }}% прибыльных)
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <h2>Статистика по парам</h2>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Пара</th>
+                                <th>Сделок</th>
+                                <th>Прибыльных</th>
+                                <th>Убыточных</th>
+                                <th>% прибыльных</th>
+                                <th>Средняя прибыль</th>
+                                <th>Общая прибыль</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pair in pair_stats %}
+                            <tr>
+                                <td>{{ pair.pair }}</td>
+                                <td>{{ pair.total_deals }}</td>
+                                <td>{{ pair.win_deals }}</td>
+                                <td>{{ pair.loss_deals }}</td>
+                                <td>{{ pair.win_percent }}%</td>
+                                <td>{{ pair.avg_profit }}%</td>
+                                <td>{{ pair.total_profit }} USDT</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-12">
+                <h2>История сделок</h2>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Пара</th>
+                                <th>Направление</th>
+                                <th>Вход</th>
+                                <th>Стоп</th>
+                                <th>Тейк</th>
+                                <th>Лучшая цена</th>
+                                <th>Размер</th>
+                                <th>% до стопа</th>
+                                <th>% до тейка</th>
+                                <th>Результат</th>
+                                <th>Прибыль</th>
+                                <th>Банк</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for deal in deals %}
+                            <tr>
+                                <td>{{ deal.datetime }}</td>
+                                <td>{{ deal.pair }}</td>
+                                <td>{{ deal.direction }}</td>
+                                <td>{{ deal.entry_price }}</td>
+                                <td>{{ deal.stop_price }}</td>
+                                <td>{{ deal.take_price }}</td>
+                                <td>{{ deal.best_price }}</td>
+                                <td>{{ deal.position_size }}</td>
+                                <td>{{ deal.stop_percent }}%</td>
+                                <td>{{ deal.take_percent }}%</td>
+                                <td>{{ deal.result }}</td>
+                                <td>{{ deal.profit }}</td>
+                                <td>{{ deal.balance }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center">
+                        {% if page > 1 %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page - 1 }}">Предыдущая</a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for p in range(1, total_pages + 1) %}
+                            {% if p == page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ p }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ p }}">{{ p }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page < total_pages %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page + 1 }}">Следующая</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var graphData = {{ graph_json|safe }};
+        Plotly.newPlot('graph', graphData.data, graphData.layout);
+    </script>
+</body>
+</html> 

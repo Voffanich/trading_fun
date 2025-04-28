@@ -237,3 +237,159 @@ class Binance_adapter():
     
     
     
+
+    def place_market_order(self, pair: str, side: str, quantity: float):
+        """
+        Размещает рыночный ордер
+        :param pair: Торговая пара (например, 'BTCUSDT')
+        :param side: Направление сделки ('BUY' или 'SELL')
+        :param quantity: Количество для торговли
+        :return: Информация об ордере или False в случае ошибки
+        """
+        try:
+            response = self.f_client.new_order(
+                symbol=pair,
+                side=side,
+                type='MARKET',
+                quantity=quantity
+            )
+            print(f"Рыночный ордер размещен: {response}")
+            return response
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+            return False
+
+    def place_limit_order(self, pair: str, side: str, quantity: float, price: float):
+        """
+        Размещает лимитный ордер
+        :param pair: Торговая пара
+        :param side: Направление сделки ('BUY' или 'SELL')
+        :param quantity: Количество для торговли
+        :param price: Цена ордера
+        :return: Информация об ордере или False в случае ошибки
+        """
+        try:
+            response = self.f_client.new_order(
+                symbol=pair,
+                side=side,
+                type='LIMIT',
+                timeInForce='GTC',
+                quantity=quantity,
+                price=price
+            )
+            print(f"Лимитный ордер размещен: {response}")
+            return response
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+            return False
+
+    def place_stop_loss(self, pair: str, side: str, quantity: float, stop_price: float, close_position: bool = False):
+        """
+        Размещает стоп-лосс ордер
+        :param pair: Торговая пара
+        :param side: Направление сделки ('BUY' или 'SELL')
+        :param quantity: Количество для торговли
+        :param stop_price: Цена активации стоп-лосса
+        :param close_position: Закрыть всю позицию (True) или частично (False)
+        :return: Информация об ордере или False в случае ошибки
+        """
+        try:
+            params = {
+                'symbol': pair,
+                'side': side,
+                'type': 'STOP_MARKET',
+                'stopPrice': stop_price,
+                'closePosition': close_position
+            }
+            if not close_position:
+                params['quantity'] = quantity
+
+            response = self.f_client.new_order(**params)
+            print(f"Стоп-лосс ордер размещен: {response}")
+            return response
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+            return False
+
+    def place_trailing_stop(self, pair: str, side: str, quantity: float, callback_rate: float, activation_price: float = None):
+        """
+        Размещает трейлинг-стоп ордер
+        :param pair: Торговая пара
+        :param side: Направление сделки ('BUY' или 'SELL')
+        :param quantity: Количество для торговли
+        :param callback_rate: Процент отката для активации трейлинг-стопа
+        :param activation_price: Цена активации трейлинг-стопа (опционально)
+        :return: Информация об ордере или False в случае ошибки
+        """
+        try:
+            params = {
+                'symbol': pair,
+                'side': side,
+                'type': 'TRAILING_STOP_MARKET',
+                'quantity': quantity,
+                'callbackRate': callback_rate
+            }
+            if activation_price:
+                params['activationPrice'] = activation_price
+
+            response = self.f_client.new_order(**params)
+            print(f"Трейлинг-стоп ордер размещен: {response}")
+            return response
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+            return False
+
+    def cancel_all_orders(self, pair: str):
+        """
+        Отменяет все ордера для указанной пары
+        :param pair: Торговая пара
+        :return: True в случае успеха, False в случае ошибки
+        """
+        try:
+            response = self.f_client.cancel_open_orders(symbol=pair)
+            print(f"Все ордера отменены: {response}")
+            return True
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+            return False
+
+    def get_position_info(self, pair: str):
+        """
+        Получает информацию о позиции
+        :param pair: Торговая пара
+        :return: Информация о позиции или False в случае ошибки
+        """
+        try:
+            response = self.f_client.get_position_risk(symbol=pair)
+            print(f"Информация о позиции: {response}")
+            return response
+        except ClientError as error:
+            print(
+                "Found error. status: {}, error code: {}, error message: {}".format(
+                    error.status_code, error.error_code, error.error_message
+                )
+            )
+            return False
+    
+    
+    
