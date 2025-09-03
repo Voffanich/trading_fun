@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run bot_5m.py",
+      "type": "shell",
+      "command": "python bot_5m.py",
+      "presentation": {
+        "panel": "new",
+        "reveal": "always"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run bot_1h.py",
+      "type": "shell",
+      "command": "python bot_1h.py",
+      "presentation": {
+        "panel": "new",
+        "reveal": "always"
+      },
+      "problemMatcher": []
+    }
+  ]
+} 

@@ -1,0 +1,445 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, Tuple
+
+from binance.um_futures import UMFutures
+from binance.error import ClientError
+import json
+from datetime import datetime
+
+
+@dataclass
+class OrderResult:
+	success: bool
+	message: str
+	error_code: Optional[int] = None
+	entry_order: Optional[Dict[str, Any]] = None
+	stop_order: Optional[Dict[str, Any]] = None
+	take_profit_order: Optional[Dict[str, Any]] = None
+	trailing_stop_order: Optional[Dict[str, Any]] = None
+	raw: Dict[str, Any] = field(default_factory=dict)
+
+
+class Binance_connect:
+	"""
+	USDT-M Futures connector for placing orders on a Binance subaccount.
+
+	Required inputs for placing a trade:
+	- symbol: trading pair, e.g. "ETHUSDT"
+	- side: "BUY" for long entry, "SELL" for short entry
+	- entry_price: target entry price from bot logic
+	- deviation_percent: percent offset from entry price to place a limit order. For BUY it places lower, for SELL it places higher
+	- stop_loss_price: protective stop price
+	- trailing_activation_price: price at which the trailing stop becomes active
+	- trailing_callback_percent: trailing callback rate (0.1% - 5% per Binance)
+	- leverage: leverage to set before placing orders
+
+	Optional:
+	- quantity: explicit contract quantity; if omitted, you must provide either notional_usdt or risk inputs via your own logic before calling
+	- notional_usdt: desired notional in USDT used to derive quantity from entry price
+	- take_profit_price: optional take-profit price
+	- margin_type: "ISOLATED" (default) or "CROSSED"
+	- reduce_only: ensure protective orders cannot increase exposure (default True)
+	- working_type: trigger reference for stop orders ("MARK_PRICE" default or "CONTRACT_PRICE")
+	- time_in_force: TIF for limit orders (default GTC)
+	- position_side: for hedge mode ("BOTH" default when one-way mode)
+	- testnet: constructor flag to use Binance Futures testnet
+	"""
+
+	def __init__(self, api_key: str, api_secret: str, testnet: bool = False, recv_window_ms: int = 60000) -> None:
+		base_url = "https://testnet.binancefuture.com" if testnet else None
+		self.client = UMFutures(key=api_key, secret=api_secret, base_url=base_url)
+		self.recv_window_ms = recv_window_ms
+
+	# -------- Logging --------
+	def _log(self, verbose: bool, message: str, details: Optional[Dict[str, Any]] = None) -> None:
+		if not verbose:
+			return
+		ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+		print(f"[{ts}] [Binance_connect] {message}")
+		if details:
+			try:
+				print("  " + json.dumps(details, ensure_ascii=False, separators=(",", ":")))
+			except Exception:
+				print("  " + str(details))
+
+	# -------- Symbol metadata and rounding --------
+	def _get_symbol_info(self, symbol: str) -> Dict[str, Any]:
+		info = self.client.exchange_info()
+		for item in info.get("symbols", []):
+			if item.get("symbol") == symbol:
+				return item
+		raise ValueError(f"Symbol {symbol} not found in exchange info")
+
+	def _get_filters(self, symbol_info: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+		filters: Dict[str, Dict[str, Any]] = {}
+		for f in symbol_info.get("filters", []):
+			filters[f.get("filterType")] = f
+		return filters
+
+	def _tick_size(self, filters: Dict[str, Dict[str, Any]]) -> float:
+		pf = filters.get("PRICE_FILTER", {})
+		return float(pf.get("tickSize", 0.0)) or 0.0
+
+	def _step_size(self, filters: Dict[str, Dict[str, Any]]) -> float:
+		ls = filters.get("LOT_SIZE", {})
+		return float(ls.get("stepSize", 0.0)) or 0.0
+
+	def _min_qty(self, filters: Dict[str, Dict[str, Any]]) -> float:
+		ls = filters.get("LOT_SIZE", {})
+		return float(ls.get("minQty", 0.0)) or 0.0
+
+	def _min_notional(self, filters: Dict[str, Dict[str, Any]]) -> float:
+		mn = filters.get("MIN_NOTIONAL", {})
+		return float(mn.get("notional", mn.get("minNotional", 0.0)) or 0.0)
+
+	def _round_to_step(self, value: float, step: float) -> float:
+		if step == 0:
+			return value
+		n_steps = int(value / step)
+		return n_steps * step
+
+	def _round_price(self, price: float, tick_size: float) -> float:
+		return self._round_to_step(price, tick_size)
+
+	def _round_qty(self, qty: float, step_size: float, min_qty: float) -> float:
+		rounded = self._round_to_step(qty, step_size)
+		if rounded < min_qty:
+			return 0.0
+		return rounded
+
+	# -------- Risk helpers --------
+	def derive_quantity(self, *, notional_usdt: Optional[float], entry_price: float, step_size: float, min_qty: float) -> float:
+		if notional_usdt is None:
+			raise ValueError("Either quantity or notional_usdt must be provided to compute quantity")
+		qty = notional_usdt / entry_price
+		qty = self._round_qty(qty, step_size, min_qty)
+		if qty <= 0:
+			raise ValueError("Calculated quantity is below the minimum lot size")
+		return qty
+
+	def derive_quantity_by_risk(
+		self,
+		*,
+		bank_usdt: float,
+		risk_percent: float,
+		entry_price: float,
+		stop_loss_price: float,
+		step_size: float,
+		min_qty: float,
+	) -> float:
+		"""
+		Risk-based position sizing for USDT-M linear contracts.
+		Risk amount = bank_usdt * (risk_percent / 100).
+		Per-unit loss at stop = abs(entry_price - stop_loss_price).
+		Quantity = Risk amount / Per-unit loss.
+		Note: Leverage affects margin requirement, not PnL at stop.
+		"""
+		if bank_usdt <= 0:
+			raise ValueError("bank_usdt must be positive")
+		if risk_percent <= 0:
+			raise ValueError("risk_percent must be positive")
+		delta = abs(entry_price - stop_loss_price)
+		if delta <= 0:
+			raise ValueError("entry_price and stop_loss_price must differ for risk calculation")
+		risk_amount = bank_usdt * (risk_percent / 100.0)
+		qty = risk_amount / delta
+		qty = self._round_qty(qty, step_size, min_qty)
+		if qty <= 0:
+			raise ValueError("Calculated quantity is below the minimum lot size")
+		return qty
+
+	def get_usdt_balance(self, balance_type: str = "wallet") -> float:
+		"""
+		Fetch USDT balance from USDT-M Futures account.
+		balance_type: "wallet" (default) or "available"
+		"""
+		try:
+			data = self.client.account(recvWindow=self.recv_window_ms)
+			for asset in data.get("assets", []):
+				if asset.get("asset") == "USDT":
+					if balance_type == "available":
+						return float(asset.get("availableBalance"))
+					return float(asset.get("walletBalance"))
+			raise RuntimeError("USDT asset not found in account assets")
+		except ClientError as e:
+			raise RuntimeError(f"Failed to fetch account balance: {e}")
+
+	def compute_quantity_from_risk(
+		self,
+		symbol: str,
+		entry_price: float,
+		stop_loss_price: float,
+		risk_percent_of_bank: float,
+		*,
+		balance_type: str = "wallet",
+		verbose: bool = False,
+	) -> float:
+		"""
+		Convenience wrapper: reads filters and current USDT balance, then derives quantity by risk and rounds to lot size.
+		"""
+		self._log(verbose, "Fetching symbol filters for sizing", {"symbol": symbol})
+		symbol_info = self._get_symbol_info(symbol)
+		filters = self._get_filters(symbol_info)
+		step_size = self._step_size(filters)
+		min_qty = self._min_qty(filters)
+		self._log(verbose, "Fetching USDT balance", {"balance_type": balance_type})
+		bank = self.get_usdt_balance(balance_type=balance_type)
+		self._log(verbose, "Balance fetched", {"bank_usdt": bank})
+		return self.derive_quantity_by_risk(
+			bank_usdt=bank,
+			risk_percent=risk_percent_of_bank,
+			entry_price=entry_price,
+			stop_loss_price=stop_loss_price,
+			step_size=step_size,
+			min_qty=min_qty,
+		)
+
+	# -------- Account setup --------
+	def set_leverage(self, symbol: str, leverage: int) -> None:
+		try:
+			self.client.change_leverage(symbol=symbol, leverage=leverage, recvWindow=self.recv_window_ms)
+		except ClientError as e:
+			raise RuntimeError(f"Failed to set leverage: {e}")
+
+	def set_margin_type(self, symbol: str, margin_type: str = "ISOLATED") -> None:
+		try:
+			self.client.change_margin_type(symbol=symbol, marginType=margin_type, recvWindow=self.recv_window_ms)
+		except ClientError as e:
+			# If already set, Binance returns error code; ignore that specific case
+			msg = getattr(e, "error_message", "")
+			if "No need to change margin type" in str(msg):
+				return
+			raise RuntimeError(f"Failed to set margin type: {e}")
+
+	# -------- Validation --------
+	def _validate_qty_notional(self, *, price: float, qty: float, min_qty: float, min_notional: float) -> None:
+		if qty < min_qty:
+			raise ValueError(f"Quantity {qty} is below minQty {min_qty}")
+		notional = price * qty
+		if min_notional > 0 and notional < min_notional:
+			raise ValueError(f"Order notional {notional} is below minNotional {min_notional}")
+
+	def _clamp_callback_rate(self, callback_percent: float) -> float:
+		# Binance USDT-M allows 0.1% - 5%
+		return max(0.1, min(5.0, callback_percent))
+
+	# -------- Main placement --------
+	def place_futures_order_with_protection(
+		self,
+		symbol: str,
+		side: str,
+		entry_price: float,
+		deviation_percent: float,
+		stop_loss_price: float,
+		trailing_activation_price: float,
+		trailing_callback_percent: float,
+		leverage: int,
+		*,
+		quantity: Optional[float] = None,
+		notional_usdt: Optional[float] = None,
+		risk_percent_of_bank: Optional[float] = None,
+		current_bank_usdt: Optional[float] = None,
+		take_profit_price: Optional[float] = None,
+		margin_type: str = "ISOLATED",
+		reduce_only: bool = True,
+		working_type: str = "MARK_PRICE",
+		time_in_force: str = "GTC",
+		position_side: str = "BOTH",
+		verbose: bool = False,
+	) -> OrderResult:
+		"""
+		Places an entry LIMIT order offset by deviation_percent from entry_price and adds stop-loss,
+		optional take-profit, and trailing-stop reduce-only orders.
+		"""
+		orders_raw: Dict[str, Any] = {}
+		try:
+			# 0) Input summary
+			self._log(verbose, "Received placement request", {
+				"symbol": symbol,
+				"side": side,
+				"entry_price": entry_price,
+				"deviation_percent": deviation_percent,
+				"stop_loss_price": stop_loss_price,
+				"trailing_activation_price": trailing_activation_price,
+				"trailing_callback_percent": trailing_callback_percent,
+				"leverage": leverage,
+				"quantity": quantity,
+				"notional_usdt": notional_usdt,
+				"risk_percent_of_bank": risk_percent_of_bank,
+				"current_bank_usdt": current_bank_usdt,
+				"margin_type": margin_type,
+				"position_side": position_side,
+				"working_type": working_type,
+				"time_in_force": time_in_force,
+			})
+
+			# 1) Symbol metadata and rounding
+			symbol_info = self._get_symbol_info(symbol)
+			filters = self._get_filters(symbol_info)
+			tick_size = self._tick_size(filters)
+			step_size = self._step_size(filters)
+			min_qty = self._min_qty(filters)
+			min_notional = self._min_notional(filters)
+			self._log(verbose, "Symbol filters loaded", {
+				"tick_size": tick_size,
+				"step_size": step_size,
+				"min_qty": min_qty,
+				"min_notional": min_notional,
+			})
+
+			# 2) Account setup
+			self.set_margin_type(symbol, margin_type)
+			self.set_leverage(symbol, leverage)
+			self._log(verbose, "Account configured", {"margin_type": margin_type, "leverage": leverage})
+
+			# 3) Determine quantity if not provided
+			if quantity is None:
+				if notional_usdt is not None:
+					quantity = self.derive_quantity(
+						notional_usdt=notional_usdt,
+						entry_price=entry_price,
+						step_size=step_size,
+						min_qty=min_qty,
+					)
+					self._log(verbose, "Quantity derived from notional", {"notional_usdt": notional_usdt, "quantity_raw": quantity})
+				elif risk_percent_of_bank is not None and current_bank_usdt is not None:
+					quantity = self.derive_quantity_by_risk(
+						bank_usdt=current_bank_usdt,
+						risk_percent=risk_percent_of_bank,
+						entry_price=entry_price,
+						stop_loss_price=stop_loss_price,
+						step_size=step_size,
+						min_qty=min_qty,
+					)
+					self._log(verbose, "Quantity derived from explicit bank+risk", {"bank_usdt": current_bank_usdt, "risk_percent": risk_percent_of_bank, "quantity_raw": quantity})
+				elif risk_percent_of_bank is not None and current_bank_usdt is None:
+					quantity = self.compute_quantity_from_risk(
+						symbol=symbol,
+						entry_price=entry_price,
+						stop_loss_price=stop_loss_price,
+						risk_percent_of_bank=risk_percent_of_bank,
+						balance_type="wallet",
+						verbose=verbose,
+					)
+				else:
+					raise ValueError("Provide either quantity, notional_usdt, or risk_percent_of_bank (with or without current_bank_usdt)")
+
+			# 4) Compute entry limit price by deviation
+			if side.upper() == "BUY":
+				limit_price_raw = entry_price * (1.0 - deviation_percent / 100.0)
+			elif side.upper() == "SELL":
+				limit_price_raw = entry_price * (1.0 + deviation_percent / 100.0)
+			else:
+				raise ValueError("side must be 'BUY' or 'SELL'")
+
+			limit_price = self._round_price(limit_price_raw, tick_size)
+			qty_rounded = self._round_qty(quantity, step_size, min_qty)
+			self._log(verbose, "Computed entry and quantity", {
+				"limit_price_raw": limit_price_raw,
+				"limit_price": limit_price,
+				"quantity_raw": quantity,
+				"quantity": qty_rounded,
+			})
+
+			# 5) Validate lot size and notional
+			self._validate_qty_notional(price=limit_price or entry_price, qty=qty_rounded, min_qty=min_qty, min_notional=min_notional)
+			self._log(verbose, "Validation passed", {"notional": (limit_price or entry_price) * qty_rounded})
+
+			# 6) Place entry LIMIT order
+			entry_order = self.client.new_order(
+				symbol=symbol,
+				side=side.upper(),
+				type="LIMIT",
+				timeInForce=time_in_force,
+				quantity=f"{qty_rounded}",
+				price=f"{limit_price}",
+				positionSide=position_side,
+				recvWindow=self.recv_window_ms,
+			)
+			orders_raw["entry"] = entry_order
+			self._log(verbose, "Entry order placed", {"orderId": entry_order.get("orderId"), "price": limit_price, "qty": qty_rounded})
+
+			# 7) Place Stop-Loss (STOP_MARKET reduceOnly)
+			stop_price = self._round_price(stop_loss_price, tick_size)
+			stop_order = self.client.new_order(
+				symbol=symbol,
+				side=("SELL" if side.upper() == "BUY" else "BUY"),
+				type="STOP_MARKET",
+				stopPrice=f"{stop_price}",
+				closePosition=False,
+				reduceOnly=reduce_only,
+				workingType=working_type,
+				quantity=f"{qty_rounded}",
+				positionSide=position_side,
+				recvWindow=self.recv_window_ms,
+			)
+			orders_raw["stop"] = stop_order
+			self._log(verbose, "Stop-loss order placed", {"orderId": stop_order.get("orderId"), "stopPrice": stop_price})
+
+			# 8) Optional Take-Profit (TAKE_PROFIT_MARKET reduceOnly)
+			take_profit_order = None
+			if take_profit_price is not None:
+				tp_price = self._round_price(float(take_profit_price), tick_size)
+				take_profit_order = self.client.new_order(
+					symbol=symbol,
+					side=("SELL" if side.upper() == "BUY" else "BUY"),
+					type="TAKE_PROFIT_MARKET",
+					stopPrice=f"{tp_price}",
+					closePosition=False,
+					reduceOnly=reduce_only,
+					workingType=working_type,
+					quantity=f"{qty_rounded}",
+					positionSide=position_side,
+					recvWindow=self.recv_window_ms,
+				)
+				orders_raw["take_profit"] = take_profit_order
+				self._log(verbose, "Take-profit order placed", {"orderId": take_profit_order.get("orderId"), "tpPrice": tp_price})
+
+			# 9) Trailing Stop (TRAILING_STOP_MARKET)
+			activation = self._round_price(trailing_activation_price, tick_size)
+			callback = self._clamp_callback_rate(trailing_callback_percent)
+			self._log(verbose, "Trailing params", {"activation": activation, "callbackRate": callback})
+			trailing_stop_order = self.client.new_order(
+				symbol=symbol,
+				side=("SELL" if side.upper() == "BUY" else "BUY"),
+				type="TRAILING_STOP_MARKET",
+				activationPrice=f"{activation}",
+				callbackRate=f"{callback}",
+				reduceOnly=reduce_only,
+				quantity=f"{qty_rounded}",
+				positionSide=position_side,
+				recvWindow=self.recv_window_ms,
+			)
+			orders_raw["trailing_stop"] = trailing_stop_order
+			self._log(verbose, "Trailing-stop order placed", {"orderId": trailing_stop_order.get("orderId")})
+
+			return OrderResult(
+				success=True,
+				message="Orders placed successfully",
+				error_code=None,
+				entry_order=entry_order,
+				stop_order=stop_order,
+				take_profit_order=take_profit_order,
+				trailing_stop_order=trailing_stop_order,
+				raw=orders_raw,
+			)
+
+		except Exception as e:
+			code: Optional[int] = None
+			msg: str = str(e)
+			if isinstance(e, ClientError):
+				code = getattr(e, "error_code", None) or getattr(e, "status_code", None)
+				msg = getattr(e, "error_message", None) or msg
+			self._log(True, "Order placement failed", {"error_code": code, "message": msg})
+			return OrderResult(
+				success=False,
+				message=msg,
+				error_code=code,
+				entry_order=None,
+				stop_order=None,
+				take_profit_order=None,
+				trailing_stop_order=None,
+				raw=orders_raw,
+			) 

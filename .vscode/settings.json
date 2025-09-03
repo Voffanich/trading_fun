@@ -1,0 +1,6 @@
+{
+    "tasks.startup": [
+      "Run bot_5m.py",
+      "Run bot_1h.py"
+    ]
+  }

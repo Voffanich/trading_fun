@@ -1,0 +1,90 @@
+{
+    "general":{
+        "db_file_name": "deals_5m_rm.sqlite",
+        "trading_timeframe": "5m",
+        "timeframes_used": ["1m", "5m", "1h", "4h", "1d"],
+        "all_timeframes": ["1m", "5m", "1h", "4h", "1d", "1w", "1M"],
+        "basic_candle_depths": [400, 250, 200, 100, 100, 55, 24],
+        "basic_candle_depth": {"1m":400, "5m":288, "1h":240, "4h":100, "1d":365, "1w":56, "1M":24},
+        "initial_bank_for_test_stats": 1000,
+        "trading_pairs": [
+            "BTCUSDT",
+            "ETHUSDT",
+            "TRXUSDT",
+            "ARBUSDT",
+            "BNBUSDT",
+            "LTCUSDT",
+            "ADAUSDT",
+            "DOTUSDT",
+            "APTUSDT",
+            "SOLUSDT",
+            "OPUSDT",
+            "DOGEUSDT",
+            "MATICUSDT",
+            "AVAXUSDT",
+            "MAGICUSDT",
+            "DYDXUSDT",
+            "MASKUSDT",
+            "ETCUSDT",
+            "NEARUSDT",
+            "SUSHIUSDT",
+            "ATOMUSDT",
+            "GALAUSDT",
+            "LINAUSDT",
+            "SUIUSDT",
+            "LUNAUSDT",
+            "FILUSDT",
+            "EDUUSDT",
+            "JOEUSDT"
+        ]
+    },    
+    "levels":{
+        "candle_depth": 200,
+        "basic_density": 1,
+        "broken_density_factor": 0.5,
+        "upper_level_density_factor": 2 
+    },
+    "deal_config":{
+        "stop_distance_mode": "far_level_price",
+        "stop_distance_modes": ["far_level_price", "middle_level_price", "close_level_price"],
+        "take_distance_mode": "far_level_price",
+        "take_distance_modes": ["far_level_price", "middle_level_price", "close_level_price"],
+        "stop_offset_mode": "dist_percentage",
+        "take_offset_mode": "dist_percentage",
+        "stop_offset_modes": {"dist_percentage": -30, "lower_atr_x" : 1, "level_percentage": 10},
+        "take_offset_modes": {"dist_percentage": 30, "lower_atr_x" : 1, "level_percentage": 10},
+        "considering_level_density": 1,
+        "profit_loss_ratio_min": 1,
+        "profit_loss_ratio_max": 7.0,
+        "take_distance_threshold": 7.0,
+        "stop_distance_threshold": 0.6,
+        "deal_risk_perc_of_bank": 0.03,
+        "leverage_on": true,
+        "leverage": 10,
+        "deal_comission": 0.04,
+        "comission_count_reverse": false,
+
+        "trailing_activation_of_stop_price": 0.85,
+        "trailing_callback_percent_of_stop_price": 0.25,
+
+        "max_one_direction_deals": 10,
+        "direction_quantity_diff": 3,
+        "max_deals_total": 16,
+        "max_deals_pair": 2,
+
+        "cool_down_check_period": 1,
+        "cool_down_loss_quantity": 3,
+        "cool_down_length": 2,
+        "cool_down_reverse" : false,
+    
+
+        "indicators_validation": true,
+        "indicators": {
+            "RSI_long": 60,
+            "RSI_short": 40,
+            "BB_long": false,
+            "BB_short": false,
+            "MACD_long": false,
+            "MACD_short": false}
+    }
+}
