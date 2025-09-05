@@ -97,6 +97,7 @@
         "backoff_sec": [0.5, 1, 2],
         "poll_interval_sec": 2,
         "placement_timeout_sec": 15,
-        "max_slippage_pct": 0.5
+        "max_slippage_pct": 1.99,
+        "unfilled_entry_ttl_sec": 180
     }
 }
