@@ -385,7 +385,7 @@ class Binance_connect:
 		position_side: str = "BOTH",
 		skip_account_setup: bool = False,
 		verbose: bool = False,
-		trailing_size_mode: str = "close_position",  # "close_position" | "quantity"
+		trailing_size_mode: str = "quantity",  # "quantity" (reduceOnly qty) | "close_position"
 		risk_balance_type: str = "available",
 	) -> OrderResult:
 		"""
@@ -580,12 +580,8 @@ class Binance_connect:
 				"recvWindow": self.recv_window_ms,
 			}
 			# choose sizing mode
-			if trailing_size_mode == "close_position":
-				trailing_stop_payload["closePosition"] = True
-				# do not pass quantity or reduceOnly with closePosition
-			else:
-				trailing_stop_payload["quantity"] = qty_str
-				trailing_stop_payload["reduceOnly"] = reduce_only
+			trailing_stop_payload["quantity"] = qty_str
+			trailing_stop_payload["reduceOnly"] = reduce_only
 			# Log final payload (without secrets)
 			self._log(verbose, "Trailing payload", trailing_stop_payload)
 			trailing_stop_order = self.client.new_order(**trailing_stop_payload)
