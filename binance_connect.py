@@ -182,15 +182,16 @@ class Binance_connect:
 
 	def cancel_order(self, symbol: str, *, order_id: Optional[int] = None, client_order_id: Optional[str] = None) -> bool:
 		try:
-			if order_id is not None:
+			if order_id is not None and order_id != 0:
 				self.client.cancel_order(symbol=symbol, orderId=order_id)
-			elif client_order_id is not None:
+			elif client_order_id is not None and client_order_id.strip():
 				self.client.cancel_order(symbol=symbol, origClientOrderId=client_order_id)
 			else:
+				self._log(True, "cancel_order skipped", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "reason": "empty or invalid ID"})
 				return False
 			return True
 		except ClientError as e:
-			self._log(True, "cancel_order failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			self._log(True, "cancel_order failed", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "error": getattr(e, "error_message", str(e))})
 			return False
 
 	def cancel_all_open_orders(self, symbol: str) -> bool:

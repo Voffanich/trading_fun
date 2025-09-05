@@ -130,37 +130,53 @@ class OrderManager:
 
 	def watch_and_cleanup(self, symbol: str, *, verbose: bool = False) -> None:
 		"""Maintain orders per symbol: before entry fill cancel stray protections; enforce TTL for unfilled entry; after fill ensure protections exist."""
-		open_orders = self.bnc.get_open_orders(symbol)
-		pos = self.bnc.get_position(symbol)
-		qty = abs(float(pos.get("positionAmt", 0))) if pos else 0.0
+		try:
+			open_orders = self.bnc.get_open_orders(symbol)
+			pos = self.bnc.get_position(symbol)
+			qty = abs(float(pos.get("positionAmt", 0))) if pos else 0.0
 
-		# classify
-		entry_orders = [o for o in open_orders if (o.get("type") == "LIMIT")]
-		prot_orders = [o for o in open_orders if (o.get("type") in ("STOP_MARKET", "TRAILING_STOP_MARKET"))]
+			# classify - фильтруем только валидные ордера с orderId
+			entry_orders = [o for o in open_orders if (o.get("type") == "LIMIT" and o.get("orderId"))]
+			prot_orders = [o for o in open_orders if (o.get("type") in ("STOP_MARKET", "TRAILING_STOP_MARKET") and o.get("orderId"))]
+			
+			if verbose:
+				self._log("cleanup_debug", {
+					"symbol": symbol, 
+					"position_qty": qty,
+					"total_orders": len(open_orders),
+					"entry_orders": len(entry_orders),
+					"prot_orders": len(prot_orders)
+				})
 
-		if qty == 0:
-			# No position: protective orders should not hang, but entry may wait until TTL
-			if prot_orders:
-				self._log("cleanup_stray_protections", {"symbol": symbol, "count": len(prot_orders)})
-				for o in prot_orders:
-					self.bnc.cancel_order(symbol, order_id=o.get("orderId"))
-			# Enforce TTL for unfilled entry limit orders
-			if self.entry_ttl_sec > 0 and entry_orders:
-				now_ms = int(time.time() * 1000)
-				oldest_ms = None
-				for o in entry_orders:
-					ms = o.get("time") or o.get("updateTime") or o.get("workingTime") or 0
-					if oldest_ms is None or (ms and ms < oldest_ms):
-						oldest_ms = ms
-				if oldest_ms and now_ms - oldest_ms > self.entry_ttl_sec * 1000:
-					self._log("entry_ttl_expired", {"symbol": symbol, "ttl_sec": self.entry_ttl_sec, "open_entries": len(entry_orders)})
+			if qty == 0:
+				# No position: protective orders should not hang, but entry may wait until TTL
+				if prot_orders:
+					self._log("cleanup_stray_protections", {"symbol": symbol, "count": len(prot_orders)})
+					for o in prot_orders:
+						order_id = o.get("orderId")
+						self.bnc.cancel_order(symbol, order_id=order_id)
+				
+				# Enforce TTL for unfilled entry limit orders
+				if self.entry_ttl_sec > 0 and entry_orders:
+					now_ms = int(time.time() * 1000)
+					oldest_ms = None
 					for o in entry_orders:
-						self.bnc.cancel_order(symbol, order_id=o.get("orderId"))
-			return
+						ms = o.get("time") or o.get("updateTime") or o.get("workingTime") or 0
+						if oldest_ms is None or (ms and ms < oldest_ms):
+							oldest_ms = ms
+					if oldest_ms and now_ms - oldest_ms > self.entry_ttl_sec * 1000:
+						self._log("entry_ttl_expired", {"symbol": symbol, "ttl_sec": self.entry_ttl_sec, "open_entries": len(entry_orders)})
+						for o in entry_orders:
+							order_id = o.get("orderId")
+							self.bnc.cancel_order(symbol, order_id=order_id)
+				return
 
-		# Position exists: ensure at least one protective order is present
-		if not prot_orders:
-			self._log("no_protection", {"symbol": symbol})
-			# best-effort: if we can infer qty from position, we could re-arm a STOP_MARKET here
-			return
+			# Position exists: ensure at least one protective order is present
+			if not prot_orders:
+				self._log("no_protection", {"symbol": symbol})
+				# best-effort: if we can infer qty from position, we could re-arm a STOP_MARKET here
+				return
+		except Exception as e:
+			self._log("watch_and_cleanup_error", {"symbol": symbol, "error": str(e)})
+			raise
 
