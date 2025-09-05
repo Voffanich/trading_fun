@@ -311,7 +311,14 @@ def main_func(trading_pairs: list, minute_flag: bool):
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
         if order_manager_enabled and om:
             try:
-                for sym in db.get_active_deals_list():
+                # cleanup per symbols seen in DB + any symbols with open orders but no DB deals
+                symbols = set(db.get_active_deals_list())
+                try:
+                    for o in bnc_conn.get_all_open_orders():
+                        symbols.add(o.get('symbol'))
+                except Exception:
+                    pass
+                for sym in symbols:
                     om.watch_and_cleanup(sym, verbose=False)
             except Exception as ex:
                 print('OrderManager cleanup error:', ex)
