@@ -91,4 +91,25 @@
             "MACD_long": false,
             "MACD_short": false}
     }
+    ,
+    "general": {
+        "db_file_name": "deals_5m_rm.sqlite",
+        "trading_timeframe": "5m",
+        "timeframes_used": ["1m", "5m", "1h", "4h", "1d"],
+        "all_timeframes": ["1m", "5m", "1h", "4h", "1d", "1w", "1M"],
+        "basic_candle_depths": [400, 250, 200, 100, 100, 55, 24],
+        "basic_candle_depth": {"1m":400, "5m":288, "1h":240, "4h":100, "1d":365, "1w":56, "1M":24},
+        "initial_bank_for_test_stats": 1000,
+        "trading_pairs": [
+            "BTCUSDT","ETHUSDT","TRXUSDT","ARBUSDT","BNBUSDT","LTCUSDT","ADAUSDT","DOTUSDT","APTUSDT","SOLUSDT","OPUSDT","DOGEUSDT","MATICUSDT","AVAXUSDT","MAGICUSDT","DYDXUSDT","MASKUSDT","ETCUSDT","NEARUSDT","SUSHIUSDT","ATOMUSDT","GALAUSDT","LINAUSDT","SUIUSDT","LUNAUSDT","FILUSDT","EDUUSDT","JOEUSDT"
+        ],
+        "use_order_manager": true
+    },
+    "order_manager": {
+        "retries": 3,
+        "backoff_sec": [0.5, 1, 2],
+        "poll_interval_sec": 2,
+        "placement_timeout_sec": 15,
+        "max_slippage_pct": 0.2
+    }
 }

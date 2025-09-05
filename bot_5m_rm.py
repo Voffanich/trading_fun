@@ -17,6 +17,7 @@ from cooldown import Cooldown
 from db_funcs import DB_handler
 from user_data.credentials import apikey3, sub1_api_key, sub1_api_secret
 from binance_connect import Binance_connect
+from order_manager import OrderManager
 from fast_data import enable_fast_backend, fast_get_ohlcv
 
 bot = telebot.TeleBot(apikey3)
@@ -32,6 +33,8 @@ bnc_conn = Binance_connect(
 	log_to_file=config['general'].get('enable_trade_calc_logging', False),
 	log_file_path='logs/binance_connector.log',
 )
+order_manager_enabled = bool(config['general'].get('use_order_manager', False))
+om = OrderManager(bnc_conn, config) if order_manager_enabled else None
 
 # Put real bank to config for dynamic pairs filtering
 try:
@@ -170,23 +173,46 @@ def check_pair(bot, chat_id, pair: str):
                 print(f'{trailing_callback_percent=}')
                         
                       
-            result = bnc_conn.place_futures_order_with_protection(
-                symbol=deal.pair,
-                side=side,
-                entry_price=deal.entry_price,
-                deviation_percent=0.1,
-                stop_loss_price=deal.stop_price,
-                trailing_activation_price=trailing_activation_price,
-                trailing_callback_percent=trailing_callback_percent,
-                leverage=config['deal_config']['leverage'],
-                risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],        # банк будет прочитан через account()
-                verbose=config['general'].get('enable_trade_calc_logging', False),
-            )
-
-            if result.success:
-                print("OK")
+            if order_manager_enabled and om:
+                result = om.place_managed_trade(
+                    symbol=deal.pair,
+                    side=side,
+                    entry_price=deal.entry_price,
+                    deviation_percent=0.1,
+                    stop_loss_price=deal.stop_price,
+                    trailing_activation_price=trailing_activation_price,
+                    trailing_callback_percent=trailing_callback_percent,
+                    leverage=config['deal_config']['leverage'],
+                    quantity=None,
+                    risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],
+                    position_side='BOTH',
+                    working_type='MARK_PRICE',
+                    time_in_force='GTC',
+                    deal_id=None,
+                    verbose=config['general'].get('enable_trade_calc_logging', False),
+                )
+                if result.get('success'):
+                    print("OK")
+                else:
+                    print("ERROR:", result.get('message'))
             else:
-                print("ERROR:", result.message, result.error_code)
+                result = bnc_conn.place_futures_order_with_protection(
+                    symbol=deal.pair,
+                    side=side,
+                    entry_price=deal.entry_price,
+                    deviation_percent=0.1,
+                    stop_loss_price=deal.stop_price,
+                    trailing_activation_price=trailing_activation_price,
+                    trailing_callback_percent=trailing_callback_percent,
+                    leverage=config['deal_config']['leverage'],
+                    risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],        # банк будет прочитан через account()
+                    verbose=config['general'].get('enable_trade_calc_logging', False),
+                )
+
+                if result.success:
+                    print("OK")
+                else:
+                    print("ERROR:", result.message, result.error_code)
                 
             
             deal_message = f"""
