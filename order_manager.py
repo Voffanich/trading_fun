@@ -110,10 +110,18 @@ class OrderManager:
 				attempt += 1
 				if time.time() - start_ts > self.placement_timeout:
 					break
-			# rollback best-effort
+			# rollback best-effort: remove only entry LIMIT if no position and leave STOP if он успел встать
 			try:
-				self._log("rollback", {"symbol": symbol})
-				self.bnc.cancel_all_open_orders(symbol)
+				pos = self.bnc.get_position(symbol)
+				qty = abs(float(pos.get("positionAmt", 0))) if pos else 0.0
+				open_orders = self.bnc.get_open_orders(symbol)
+				if qty == 0:
+					for o in open_orders:
+						if o.get("type") == "LIMIT":
+							self.bnc.cancel_order(symbol, order_id=o.get("orderId"))
+				else:
+					# если позиция уже есть — откат не делаем автоматически
+					self._log("rollback_skipped_position_open", {"symbol": symbol})
 			except Exception:
 				pass
 			return {"success": False, "message": last_error or "placement failed"}

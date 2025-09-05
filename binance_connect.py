@@ -584,9 +584,14 @@ class Binance_connect:
 			trailing_stop_payload["reduceOnly"] = reduce_only
 			# Log final payload (without secrets)
 			self._log(verbose, "Trailing payload", trailing_stop_payload)
-			trailing_stop_order = self.client.new_order(**trailing_stop_payload)
-			orders_raw["trailing_stop"] = trailing_stop_order
-			self._log(verbose, "Trailing-stop order placed", {"orderId": trailing_stop_order.get("orderId"), "response": trailing_stop_order})
+			trailing_stop_order = None
+			try:
+				trailing_stop_order = self.client.new_order(**trailing_stop_payload)
+				orders_raw["trailing_stop"] = trailing_stop_order
+				self._log(verbose, "Trailing-stop order placed", {"orderId": trailing_stop_order.get("orderId"), "response": trailing_stop_order})
+			except Exception as te:
+				# Non-fatal: keep entry and stop orders active; report in logs
+				self._log(True, "Trailing order failed (non-fatal)", {"error": str(te)})
 
 			return OrderResult(
 				success=True,
