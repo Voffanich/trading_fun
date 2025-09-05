@@ -153,6 +153,65 @@ class Binance_connect:
 			return 0.0
 		return rounded
 
+	# -------- Public helpers for orders and positions --------
+	def get_open_orders(self, symbol: str) -> list:
+		try:
+			return self.client.get_open_orders(symbol=symbol)
+		except ClientError as e:
+			self._log(True, "get_open_orders failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return []
+
+	def get_order(self, symbol: str, *, order_id: Optional[int] = None, client_order_id: Optional[str] = None) -> Optional[dict]:
+		try:
+			if order_id is not None:
+				return self.client.get_order(symbol=symbol, orderId=order_id)
+			elif client_order_id is not None:
+				return self.client.get_order(symbol=symbol, origClientOrderId=client_order_id)
+			return None
+		except ClientError as e:
+			self._log(True, "get_order failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return None
+
+	def cancel_order(self, symbol: str, *, order_id: Optional[int] = None, client_order_id: Optional[str] = None) -> bool:
+		try:
+			if order_id is not None:
+				self.client.cancel_order(symbol=symbol, orderId=order_id)
+			elif client_order_id is not None:
+				self.client.cancel_order(symbol=symbol, origClientOrderId=client_order_id)
+			else:
+				return False
+			return True
+		except ClientError as e:
+			self._log(True, "cancel_order failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return False
+
+	def cancel_all_open_orders(self, symbol: str) -> bool:
+		try:
+			self.client.cancel_open_orders(symbol=symbol)
+			return True
+		except ClientError as e:
+			self._log(True, "cancel_all_open_orders failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return False
+
+	def get_mark_price(self, symbol: str) -> Optional[float]:
+		try:
+			mp = self.client.mark_price(symbol=symbol)
+			return float(mp.get("markPrice")) if isinstance(mp, dict) and mp.get("markPrice") is not None else None
+		except ClientError as e:
+			self._log(True, "get_mark_price failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return None
+
+	def get_position(self, symbol: str) -> Optional[dict]:
+		try:
+			positions = self.client.account(recvWindow=self.recv_window_ms)
+			for p in positions.get("positions", []):
+				if p.get("symbol") == symbol:
+					return p
+			return None
+		except ClientError as e:
+			self._log(True, "get_position failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return None
+
 	# -------- Risk helpers --------
 	def derive_quantity(self, *, notional_usdt: Optional[float], entry_price: float, step_size: float, min_qty: float) -> float:
 		if notional_usdt is None:
