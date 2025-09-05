@@ -314,12 +314,20 @@ def main_func(trading_pairs: list, minute_flag: bool):
                 # cleanup per symbols seen in DB + any symbols with open orders but no DB deals
                 symbols = set(db.get_active_deals_list())
                 try:
-                    for o in bnc_conn.get_all_open_orders():
-                        symbols.add(o.get('symbol'))
-                except Exception:
-                    pass
+                    all_orders = bnc_conn.get_all_open_orders()
+                    for o in all_orders:
+                        symbol = o.get('symbol')
+                        if symbol:
+                            symbols.add(symbol)
+                except Exception as ex:
+                    print(f'Failed to get all open orders: {ex}')
+                
+                print(f'OrderManager cleanup: processing {len(symbols)} symbols: {list(symbols)}')
                 for sym in symbols:
-                    om.watch_and_cleanup(sym, verbose=False)
+                    try:
+                        om.watch_and_cleanup(sym, verbose=True)  # включим verbose для отладки
+                    except Exception as sym_ex:
+                        print(f'OrderManager cleanup error for {sym}: {sym_ex}')
             except Exception as ex:
                 print('OrderManager cleanup error:', ex)
         
