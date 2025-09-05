@@ -8,6 +8,7 @@ from binance.error import ClientError
 import json
 from datetime import datetime
 import os
+from decimal import Decimal, ROUND_DOWN, getcontext
 
 
 @dataclass
@@ -103,6 +104,23 @@ class Binance_connect:
 		for f in symbol_info.get("filters", []):
 			filters[f.get("filterType")] = f
 		return filters
+
+	# -------- Decimal helpers strictly matching Binance filters --------
+	def _quantum_from_step(self, step_str: str) -> Decimal:
+		"""Return Decimal quantum for quantize based on a Binance step string (e.g. '0.0001' or '1e-8')."""
+		if not step_str:
+			step_str = "1"
+		return Decimal(step_str)
+
+	def _format_by_step(self, value: float, step_str: str) -> str:
+		"""Quantize value DOWN to the given step and return as plain string without excess trailing zeros."""
+		getcontext().prec = 28
+		quant = self._quantum_from_step(step_str)
+		q = (Decimal(str(value))).quantize(quant, rounding=ROUND_DOWN)
+		s = format(q, 'f')
+		if '.' in s:
+			s = s.rstrip('0').rstrip('.') or '0'
+		return s
 
 	def _tick_size(self, filters: Dict[str, Dict[str, Any]]) -> float:
 		pf = filters.get("PRICE_FILTER", {})
@@ -342,6 +360,8 @@ class Binance_connect:
 			# 1) Symbol metadata and rounding
 			symbol_info = self._get_symbol_info(symbol)
 			filters = self._get_filters(symbol_info)
+			pf = filters.get("PRICE_FILTER", {})
+			ls = filters.get("LOT_SIZE", {})
 			tick_size = self._tick_size(filters)
 			step_size = self._step_size(filters)
 			min_qty = self._min_qty(filters)
@@ -402,16 +422,21 @@ class Binance_connect:
 
 			limit_price = self._round_price(limit_price_raw, tick_size)
 			qty_rounded = self._round_qty(quantity, step_size, min_qty)
+			# Prepare strings according to Binance steps
+			tick_size_str = str(pf.get("tickSize", "0.0001"))
+			step_size_str = str(ls.get("stepSize", "1"))
+			limit_price_str = self._format_by_step(limit_price, tick_size_str)
+			qty_str = self._format_by_step(qty_rounded, step_size_str)
 			self._log(verbose, "Computed entry and quantity", {
 				"limit_price_raw": limit_price_raw,
-				"limit_price": limit_price,
+				"limit_price": limit_price_str,
 				"quantity_raw": quantity,
-				"quantity": qty_rounded,
+				"quantity": qty_str,
 			})
 
 			# 5) Validate lot size and notional
-			self._validate_qty_notional(price=limit_price or entry_price, qty=qty_rounded, min_qty=min_qty, min_notional=min_notional)
-			self._log(verbose, "Validation passed", {"notional": (limit_price or entry_price) * qty_rounded})
+			self._validate_qty_notional(price=float(limit_price_str) if limit_price_str else entry_price, qty=float(qty_str), min_qty=min_qty, min_notional=min_notional)
+			self._log(verbose, "Validation passed", {"notional": (float(limit_price_str) if limit_price_str else entry_price) * float(qty_str)})
 
 			# 6) Place entry LIMIT order
 			entry_order = self.client.new_order(
@@ -419,53 +444,58 @@ class Binance_connect:
 				side=side.upper(),
 				type="LIMIT",
 				timeInForce=time_in_force,
-				quantity=f"{qty_rounded}",
-				price=f"{limit_price}",
+				quantity=qty_str,
+				price=limit_price_str,
 				positionSide=position_side,
 				recvWindow=self.recv_window_ms,
 			)
 			orders_raw["entry"] = entry_order
-			self._log(verbose, "Entry order placed", {"orderId": entry_order.get("orderId"), "price": limit_price, "qty": qty_rounded, "response": entry_order})
+			self._log(verbose, "Entry order placed", {"orderId": entry_order.get("orderId"), "price": limit_price_str, "qty": qty_str, "response": entry_order})
 
 			# 7) Place Stop-Loss (STOP_MARKET reduceOnly)
 			stop_price = self._round_price(stop_loss_price, tick_size)
+			stop_price_str = self._format_by_step(stop_price, tick_size_str)
 			stop_order = self.client.new_order(
 				symbol=symbol,
 				side=("SELL" if side.upper() == "BUY" else "BUY"),
 				type="STOP_MARKET",
-				stopPrice=f"{stop_price}",
+				stopPrice=stop_price_str,
 				closePosition=False,
 				reduceOnly=reduce_only,
 				workingType=working_type,
-				quantity=f"{qty_rounded}",
+				quantity=qty_str,
 				positionSide=position_side,
 				recvWindow=self.recv_window_ms,
 			)
 			orders_raw["stop"] = stop_order
-			self._log(verbose, "Stop-loss order placed", {"orderId": stop_order.get("orderId"), "stopPrice": stop_price, "response": stop_order})
+			self._log(verbose, "Stop-loss order placed", {"orderId": stop_order.get("orderId"), "stopPrice": stop_price_str, "response": stop_order})
 
 			# 8) Optional Take-Profit (TAKE_PROFIT_MARKET reduceOnly)
 			take_profit_order = None
 			if take_profit_price is not None:
 				tp_price = self._round_price(float(take_profit_price), tick_size)
+				tp_price_str = self._format_by_step(tp_price, tick_size_str)
 				take_profit_order = self.client.new_order(
 					symbol=symbol,
 					side=("SELL" if side.upper() == "BUY" else "BUY"),
 					type="TAKE_PROFIT_MARKET",
-					stopPrice=f"{tp_price}",
+					stopPrice=tp_price_str,
 					closePosition=False,
 					reduceOnly=reduce_only,
 					workingType=working_type,
-					quantity=f"{qty_rounded}",
+					quantity=qty_str,
 					positionSide=position_side,
 					recvWindow=self.recv_window_ms,
 				)
 				orders_raw["take_profit"] = take_profit_order
-				self._log(verbose, "Take-profit order placed", {"orderId": take_profit_order.get("orderId"), "tpPrice": tp_price, "response": take_profit_order})
+				self._log(verbose, "Take-profit order placed", {"orderId": take_profit_order.get("orderId"), "tpPrice": tp_price_str, "response": take_profit_order})
 
 			# 9) Trailing Stop (TRAILING_STOP_MARKET)
 			activation = self._round_price(trailing_activation_price, tick_size)
+			activation_str = self._format_by_step(activation, tick_size_str)
 			callback = self._clamp_callback_rate(trailing_callback_percent)
+			# One decimal step for callbackRate
+			callback_str = format((Decimal(str(callback)).quantize(Decimal('0.1'), rounding=ROUND_DOWN)), 'f')
 			# Try to fetch current mark price for diagnostics
 			mark_price_val: Optional[float] = None
 			try:
@@ -477,16 +507,16 @@ class Binance_connect:
 			# Log trailing diagnostics
 			self._log(verbose, "Trailing params", {
 				"side": ("SELL" if side.upper() == "BUY" else "BUY"),
-				"activation": activation,
-				"callbackRate": callback,
+				"activation": activation_str,
+				"callbackRate": callback_str,
 				"markPrice": mark_price_val,
 			})
 			trailing_stop_payload = {
 				"symbol": symbol,
 				"side": ("SELL" if side.upper() == "BUY" else "BUY"),
 				"type": "TRAILING_STOP_MARKET",
-				"activationPrice": f"{activation}",
-				"callbackRate": f"{callback}",
+				"activationPrice": activation_str,
+				"callbackRate": callback_str,
 				"positionSide": position_side,
 				"recvWindow": self.recv_window_ms,
 			}
@@ -495,7 +525,7 @@ class Binance_connect:
 				trailing_stop_payload["closePosition"] = True
 				# do not pass quantity or reduceOnly with closePosition
 			else:
-				trailing_stop_payload["quantity"] = f"{qty_rounded}"
+				trailing_stop_payload["quantity"] = qty_str
 				trailing_stop_payload["reduceOnly"] = reduce_only
 			# Log final payload (without secrets)
 			self._log(verbose, "Trailing payload", trailing_stop_payload)
