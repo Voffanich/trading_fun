@@ -161,5 +161,6 @@ class OrderManager:
 		# Position exists: ensure at least one protective order is present
 		if not prot_orders:
 			self._log("no_protection", {"symbol": symbol})
+			# best-effort: if we can infer qty from position, we could re-arm a STOP_MARKET here
 			return
 

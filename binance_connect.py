@@ -161,6 +161,14 @@ class Binance_connect:
 			self._log(True, "get_open_orders failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
 			return []
 
+	def get_all_open_orders(self) -> list:
+		"""Return all open orders across symbols (UMFutures supports no-symbol call)."""
+		try:
+			return self.client.get_open_orders()
+		except ClientError as e:
+			self._log(True, "get_all_open_orders failed", {"error": getattr(e, "error_message", str(e))})
+			return []
+
 	def get_order(self, symbol: str, *, order_id: Optional[int] = None, client_order_id: Optional[str] = None) -> Optional[dict]:
 		try:
 			if order_id is not None:
