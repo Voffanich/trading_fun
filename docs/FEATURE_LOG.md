@@ -9,6 +9,7 @@
   - Проверки факта размещения, догон защитных ордеров, отмена «лишнего».
   - Отмена оставшегося ордера при срабатывании стопа/трейлинга.
   - Ограничение проскальзывания по `markPrice` (config).
+  - Логирование в консоль и файл `logs/order_manager.log` (JSON-формат).
 - Расширен `Binance_connect`:
   - Методы: `get_open_orders(symbol)`, `get_order(symbol, orderId|origClientOrderId)`, `cancel_order(...)`, `cancel_all_open_orders(symbol)`, `get_position(symbol)`, `get_mark_price(symbol)`.
   - Строгое форматирование чисел по `tickSize/stepSize` (Decimal) для избежания ошибок точности (-1111).

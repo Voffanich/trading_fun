@@ -1,5 +1,8 @@
 import threading
 import time
+import json
+import os
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from binance_connect import Binance_connect
@@ -15,6 +18,10 @@ class OrderManager:
 		self.poll_interval: float = float(self.cfg.get("poll_interval_sec", 2))
 		self.placement_timeout: float = float(self.cfg.get("placement_timeout_sec", 15))
 		self.max_slippage_pct: float = float(self.cfg.get("max_slippage_pct", 0.2))
+		self.log_to_console: bool = bool(config.get("general", {}).get("enable_trade_calc_logging", False))
+		self.log_to_file: bool = True
+		self.log_path: str = os.path.join("logs", "order_manager.log")
+		os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
 		self._locks: Dict[str, threading.Lock] = {}
 
 	def _lock_for_symbol(self, symbol: str) -> threading.Lock:
@@ -28,6 +35,22 @@ class OrderManager:
 			return True
 		delta = abs(mark - planned_entry) / planned_entry * 100.0
 		return delta <= self.max_slippage_pct
+
+	def _log(self, event: str, details: Dict[str, Any] = None):
+		rec = {
+			"ts": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+			"event": event,
+			"details": details or {}
+		}
+		line = json.dumps(rec, ensure_ascii=False)
+		if self.log_to_console:
+			print(f"[OrderManager] {line}")
+		if self.log_to_file:
+			try:
+				with open(self.log_path, "a", encoding="utf-8") as f:
+					f.write(line + "\n")
+			except Exception:
+				pass
 
 	def place_managed_trade(self,
 		*,
@@ -55,7 +78,9 @@ class OrderManager:
 			attempt = 0
 			last_error = None
 			while attempt <= self.retries:
+				self._log("place_attempt", {"symbol": symbol, "attempt": attempt})
 				if not self._slippage_ok(symbol, entry_price):
+					self._log("slippage_block", {"symbol": symbol, "entry_price": entry_price})
 					return {"success": False, "message": "slippage too high"}
 				res = self.bnc.place_futures_order_with_protection(
 					symbol=symbol,
@@ -75,8 +100,10 @@ class OrderManager:
 					verbose=verbose,
 				)
 				if res.success:
+					self._log("place_success", {"symbol": symbol})
 					return {"success": True, "orders": res.raw}
 				last_error = res.message
+				self._log("place_error", {"symbol": symbol, "message": last_error})
 				if attempt < len(self.backoff):
 					time.sleep(self.backoff[attempt])
 				attempt += 1
@@ -84,6 +111,7 @@ class OrderManager:
 					break
 			# rollback best-effort
 			try:
+				self._log("rollback", {"symbol": symbol})
 				self.bnc.cancel_all_open_orders(symbol)
 			except Exception:
 				pass
@@ -99,13 +127,13 @@ class OrderManager:
 		if qty == 0:
 			# No position: protective orders should not hang
 			if open_orders:
+				self._log("cleanup_no_position", {"symbol": symbol, "open_orders": len(open_orders)})
 				self.bnc.cancel_all_open_orders(symbol)
 			return
 		# Position exists: ensure at least one protective order is present
 		has_protection = any(o.get("type") in ("STOP_MARKET", "TRAILING_STOP_MARKET") for o in open_orders)
 		if not has_protection:
 			# Best-effort: add trailing stop by last known params is out of scope here; needs strategy context
-			if verbose:
-				print(f"No protection orders for {symbol}, please re-arm protection")
+			self._log("no_protection", {"symbol": symbol})
 			return
 
