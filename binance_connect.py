@@ -7,6 +7,7 @@ from binance.um_futures import UMFutures
 from binance.error import ClientError
 import json
 from datetime import datetime
+import os
 
 
 @dataclass
@@ -45,24 +46,49 @@ class Binance_connect:
 	- time_in_force: TIF for limit orders (default GTC)
 	- position_side: for hedge mode ("BOTH" default when one-way mode)
 	- testnet: constructor flag to use Binance Futures testnet
+	- skip_account_setup: if True, do NOT change margin type or leverage inside the method (default False)
+	- log_to_file: if True, write structured JSON logs to a file (default False)
+	- log_file_path: path to the log file (default "logs/binance_connector.log")
 	"""
 
-	def __init__(self, api_key: str, api_secret: str, testnet: bool = False, recv_window_ms: int = 60000) -> None:
-		base_url = "https://testnet.binancefuture.com" if testnet else None
-		self.client = UMFutures(key=api_key, secret=api_secret, base_url=base_url)
+	def __init__(self, api_key: str, api_secret: str, testnet: bool = False, recv_window_ms: int = 60000, *, log_to_file: bool = False, log_file_path: Optional[str] = None) -> None:
+		if testnet:
+			self.client = UMFutures(key=api_key, secret=api_secret, base_url="https://testnet.binancefuture.com")
+		else:
+			self.client = UMFutures(key=api_key, secret=api_secret)
 		self.recv_window_ms = recv_window_ms
+		self.log_to_file = log_to_file
+		self.log_file_path = log_file_path or os.path.join("logs", "binance_connector.log")
+		if self.log_to_file:
+			os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
 
 	# -------- Logging --------
-	def _log(self, verbose: bool, message: str, details: Optional[Dict[str, Any]] = None) -> None:
-		if not verbose:
+	def _write_file_log(self, event: str, details: Optional[Dict[str, Any]] = None) -> None:
+		if not self.log_to_file:
 			return
-		ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-		print(f"[{ts}] [Binance_connect] {message}")
-		if details:
-			try:
-				print("  " + json.dumps(details, ensure_ascii=False, separators=(",", ":")))
-			except Exception:
-				print("  " + str(details))
+		record = {
+			"ts": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+			"event": event,
+			"details": details or {},
+		}
+		try:
+			with open(self.log_file_path, "a", encoding="utf-8") as f:
+				f.write(json.dumps(record, ensure_ascii=False) + "\n")
+		except Exception:
+			pass
+
+	def _log(self, verbose: bool, message: str, details: Optional[Dict[str, Any]] = None) -> None:
+		# Console
+		if verbose:
+			ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+			print(f"[{ts}] [Binance_connect] {message}")
+			if details:
+				try:
+					print("  " + json.dumps(details, ensure_ascii=False, separators=(",", ":")))
+				except Exception:
+					print("  " + str(details))
+		# File
+		self._write_file_log(message, details)
 
 	# -------- Symbol metadata and rounding --------
 	def _get_symbol_info(self, symbol: str) -> Dict[str, Any]:
@@ -144,8 +170,8 @@ class Binance_connect:
 		if delta <= 0:
 			raise ValueError("entry_price and stop_loss_price must differ for risk calculation")
 		risk_amount = bank_usdt * (risk_percent / 100.0)
-		qty = risk_amount / delta
-		qty = self._round_qty(qty, step_size, min_qty)
+		qty_raw = risk_amount / delta
+		qty = self._round_qty(qty_raw, step_size, min_qty)
 		if qty <= 0:
 			raise ValueError("Calculated quantity is below the minimum lot size")
 		return qty
@@ -157,6 +183,7 @@ class Binance_connect:
 		"""
 		try:
 			data = self.client.account(recvWindow=self.recv_window_ms)
+			self._write_file_log("account", {"response": data})
 			for asset in data.get("assets", []):
 				if asset.get("asset") == "USDT":
 					if balance_type == "available":
@@ -164,6 +191,7 @@ class Binance_connect:
 					return float(asset.get("walletBalance"))
 			raise RuntimeError("USDT asset not found in account assets")
 		except ClientError as e:
+			self._write_file_log("account_error", {"error": getattr(e, "error_message", str(e))})
 			raise RuntimeError(f"Failed to fetch account balance: {e}")
 
 	def compute_quantity_from_risk(
@@ -173,11 +201,11 @@ class Binance_connect:
 		stop_loss_price: float,
 		risk_percent_of_bank: float,
 		*,
-		balance_type: str = "wallet",
+		balance_type: str = "available",
 		verbose: bool = False,
 	) -> float:
 		"""
-		Convenience wrapper: reads filters and current USDT balance, then derives quantity by risk and rounds to lot size.
+		Convenience wrapper: reads filters and current USDT balance (available by default), then derives quantity by risk and rounds to lot size.
 		"""
 		self._log(verbose, "Fetching symbol filters for sizing", {"symbol": symbol})
 		symbol_info = self._get_symbol_info(symbol)
@@ -187,30 +215,50 @@ class Binance_connect:
 		self._log(verbose, "Fetching USDT balance", {"balance_type": balance_type})
 		bank = self.get_usdt_balance(balance_type=balance_type)
 		self._log(verbose, "Balance fetched", {"bank_usdt": bank})
-		return self.derive_quantity_by_risk(
-			bank_usdt=bank,
-			risk_percent=risk_percent_of_bank,
-			entry_price=entry_price,
-			stop_loss_price=stop_loss_price,
-			step_size=step_size,
-			min_qty=min_qty,
-		)
+		# Detailed sizing math
+		delta = abs(entry_price - stop_loss_price)
+		risk_amount = bank * (risk_percent_of_bank / 100.0)
+		qty_raw = risk_amount / delta if delta > 0 else 0
+		qty_rounded = self._round_qty(qty_raw, step_size, min_qty)
+		self._log(verbose, "Sizing by risk", {
+			"entry_price": entry_price,
+			"stop_loss_price": stop_loss_price,
+			"delta": delta,
+			"bank_usdt": bank,
+			"risk_percent": risk_percent_of_bank,
+			"risk_amount": risk_amount,
+			"step_size": step_size,
+			"min_qty": min_qty,
+			"qty_raw": qty_raw,
+			"qty_rounded": qty_rounded,
+		})
+		return qty_rounded
 
 	# -------- Account setup --------
 	def set_leverage(self, symbol: str, leverage: int) -> None:
 		try:
-			self.client.change_leverage(symbol=symbol, leverage=leverage, recvWindow=self.recv_window_ms)
+			resp = self.client.change_leverage(symbol=symbol, leverage=leverage, recvWindow=self.recv_window_ms)
+			self._write_file_log("change_leverage", {"symbol": symbol, "leverage": leverage, "response": resp})
 		except ClientError as e:
+			code = getattr(e, "error_code", None) or getattr(e, "status_code", None)
+			self._write_file_log("change_leverage_error", {"symbol": symbol, "leverage": leverage, "error": getattr(e, "error_message", str(e)), "code": code})
+			if code in (-2015, 401):
+				raise RuntimeError("Failed to set leverage: invalid API key, IP whitelist, or missing Futures permissions")
 			raise RuntimeError(f"Failed to set leverage: {e}")
 
 	def set_margin_type(self, symbol: str, margin_type: str = "ISOLATED") -> None:
 		try:
-			self.client.change_margin_type(symbol=symbol, marginType=margin_type, recvWindow=self.recv_window_ms)
+			resp = self.client.change_margin_type(symbol=symbol, marginType=margin_type, recvWindow=self.recv_window_ms)
+			self._write_file_log("change_margin_type", {"symbol": symbol, "margin_type": margin_type, "response": resp})
 		except ClientError as e:
 			# If already set, Binance returns error code; ignore that specific case
 			msg = getattr(e, "error_message", "")
+			code = getattr(e, "error_code", None) or getattr(e, "status_code", None)
+			self._write_file_log("change_margin_type_error", {"symbol": symbol, "margin_type": margin_type, "error": msg, "code": code})
 			if "No need to change margin type" in str(msg):
 				return
+			if code in (-2015, 401):
+				raise RuntimeError("Failed to set margin type: invalid API key, IP whitelist, or missing Futures permissions")
 			raise RuntimeError(f"Failed to set margin type: {e}")
 
 	# -------- Validation --------
@@ -222,8 +270,19 @@ class Binance_connect:
 			raise ValueError(f"Order notional {notional} is below minNotional {min_notional}")
 
 	def _clamp_callback_rate(self, callback_percent: float) -> float:
-		# Binance USDT-M allows 0.1% - 5%
-		return max(0.1, min(5.0, callback_percent))
+		# Binance USDT-M allows 0.1% - 5% and requires 0.1% step
+		try:
+			val = float(callback_percent)
+		except Exception:
+			val = 0.1
+		# round to one decimal (0.1 step)
+		val = round(val, 1)
+		# enforce bounds
+		if val < 0.1:
+			val = 0.1
+		elif val > 5.0:
+			val = 5.0
+		return val
 
 	# -------- Main placement --------
 	def place_futures_order_with_protection(
@@ -247,7 +306,10 @@ class Binance_connect:
 		working_type: str = "MARK_PRICE",
 		time_in_force: str = "GTC",
 		position_side: str = "BOTH",
+		skip_account_setup: bool = False,
 		verbose: bool = False,
+		trailing_size_mode: str = "close_position",  # "close_position" | "quantity"
+		risk_balance_type: str = "available",
 	) -> OrderResult:
 		"""
 		Places an entry LIMIT order offset by deviation_percent from entry_price and adds stop-loss,
@@ -256,7 +318,7 @@ class Binance_connect:
 		orders_raw: Dict[str, Any] = {}
 		try:
 			# 0) Input summary
-			self._log(verbose, "Received placement request", {
+			input_summary = {
 				"symbol": symbol,
 				"side": side,
 				"entry_price": entry_price,
@@ -273,7 +335,9 @@ class Binance_connect:
 				"position_side": position_side,
 				"working_type": working_type,
 				"time_in_force": time_in_force,
-			})
+				"trailing_size_mode": trailing_size_mode,
+			}
+			self._log(verbose, "Received placement request", input_summary)
 
 			# 1) Symbol metadata and rounding
 			symbol_info = self._get_symbol_info(symbol)
@@ -282,17 +346,19 @@ class Binance_connect:
 			step_size = self._step_size(filters)
 			min_qty = self._min_qty(filters)
 			min_notional = self._min_notional(filters)
-			self._log(verbose, "Symbol filters loaded", {
+			filters_summary = {
 				"tick_size": tick_size,
 				"step_size": step_size,
 				"min_qty": min_qty,
 				"min_notional": min_notional,
-			})
+			}
+			self._log(verbose, "Symbol filters loaded", filters_summary)
 
-			# 2) Account setup
-			self.set_margin_type(symbol, margin_type)
-			self.set_leverage(symbol, leverage)
-			self._log(verbose, "Account configured", {"margin_type": margin_type, "leverage": leverage})
+			# 2) Account setup (optional)
+			if not skip_account_setup:
+				self.set_margin_type(symbol, margin_type)
+				self.set_leverage(symbol, leverage)
+				self._log(verbose, "Account configured", {"margin_type": margin_type, "leverage": leverage})
 
 			# 3) Determine quantity if not provided
 			if quantity is None:
@@ -320,7 +386,7 @@ class Binance_connect:
 						entry_price=entry_price,
 						stop_loss_price=stop_loss_price,
 						risk_percent_of_bank=risk_percent_of_bank,
-						balance_type="wallet",
+						balance_type=risk_balance_type,
 						verbose=verbose,
 					)
 				else:
@@ -359,7 +425,7 @@ class Binance_connect:
 				recvWindow=self.recv_window_ms,
 			)
 			orders_raw["entry"] = entry_order
-			self._log(verbose, "Entry order placed", {"orderId": entry_order.get("orderId"), "price": limit_price, "qty": qty_rounded})
+			self._log(verbose, "Entry order placed", {"orderId": entry_order.get("orderId"), "price": limit_price, "qty": qty_rounded, "response": entry_order})
 
 			# 7) Place Stop-Loss (STOP_MARKET reduceOnly)
 			stop_price = self._round_price(stop_loss_price, tick_size)
@@ -376,7 +442,7 @@ class Binance_connect:
 				recvWindow=self.recv_window_ms,
 			)
 			orders_raw["stop"] = stop_order
-			self._log(verbose, "Stop-loss order placed", {"orderId": stop_order.get("orderId"), "stopPrice": stop_price})
+			self._log(verbose, "Stop-loss order placed", {"orderId": stop_order.get("orderId"), "stopPrice": stop_price, "response": stop_order})
 
 			# 8) Optional Take-Profit (TAKE_PROFIT_MARKET reduceOnly)
 			take_profit_order = None
@@ -395,25 +461,47 @@ class Binance_connect:
 					recvWindow=self.recv_window_ms,
 				)
 				orders_raw["take_profit"] = take_profit_order
-				self._log(verbose, "Take-profit order placed", {"orderId": take_profit_order.get("orderId"), "tpPrice": tp_price})
+				self._log(verbose, "Take-profit order placed", {"orderId": take_profit_order.get("orderId"), "tpPrice": tp_price, "response": take_profit_order})
 
 			# 9) Trailing Stop (TRAILING_STOP_MARKET)
 			activation = self._round_price(trailing_activation_price, tick_size)
 			callback = self._clamp_callback_rate(trailing_callback_percent)
-			self._log(verbose, "Trailing params", {"activation": activation, "callbackRate": callback})
-			trailing_stop_order = self.client.new_order(
-				symbol=symbol,
-				side=("SELL" if side.upper() == "BUY" else "BUY"),
-				type="TRAILING_STOP_MARKET",
-				activationPrice=f"{activation}",
-				callbackRate=f"{callback}",
-				reduceOnly=reduce_only,
-				quantity=f"{qty_rounded}",
-				positionSide=position_side,
-				recvWindow=self.recv_window_ms,
-			)
+			# Try to fetch current mark price for diagnostics
+			mark_price_val: Optional[float] = None
+			try:
+				mp = self.client.mark_price(symbol=symbol)
+				# UMFutures.mark_price returns {"symbol":"ETHUSDT","markPrice":"...", ...}
+				mark_price_val = float(mp.get("markPrice")) if isinstance(mp, dict) else None
+			except Exception:
+				mark_price_val = None
+			# Log trailing diagnostics
+			self._log(verbose, "Trailing params", {
+				"side": ("SELL" if side.upper() == "BUY" else "BUY"),
+				"activation": activation,
+				"callbackRate": callback,
+				"markPrice": mark_price_val,
+			})
+			trailing_stop_payload = {
+				"symbol": symbol,
+				"side": ("SELL" if side.upper() == "BUY" else "BUY"),
+				"type": "TRAILING_STOP_MARKET",
+				"activationPrice": f"{activation}",
+				"callbackRate": f"{callback}",
+				"positionSide": position_side,
+				"recvWindow": self.recv_window_ms,
+			}
+			# choose sizing mode
+			if trailing_size_mode == "close_position":
+				trailing_stop_payload["closePosition"] = True
+				# do not pass quantity or reduceOnly with closePosition
+			else:
+				trailing_stop_payload["quantity"] = f"{qty_rounded}"
+				trailing_stop_payload["reduceOnly"] = reduce_only
+			# Log final payload (without secrets)
+			self._log(verbose, "Trailing payload", trailing_stop_payload)
+			trailing_stop_order = self.client.new_order(**trailing_stop_payload)
 			orders_raw["trailing_stop"] = trailing_stop_order
-			self._log(verbose, "Trailing-stop order placed", {"orderId": trailing_stop_order.get("orderId")})
+			self._log(verbose, "Trailing-stop order placed", {"orderId": trailing_stop_order.get("orderId"), "response": trailing_stop_order})
 
 			return OrderResult(
 				success=True,

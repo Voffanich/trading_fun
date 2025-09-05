@@ -73,4 +73,5 @@ wcwidth==0.2.6
 websocket-client==1.6.1
 XlsxWriter==3.0.3
 yarg==0.1.9
-python_binance-1.0.19
+python-binance==1.0.19
+ta==0.10.2

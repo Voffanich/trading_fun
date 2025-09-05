@@ -17,12 +17,35 @@ from cooldown import Cooldown
 from db_funcs import DB_handler
 from user_data.credentials import apikey3, sub1_api_key, sub1_api_secret
 from binance_connect import Binance_connect
+from fast_data import enable_fast_backend, fast_get_ohlcv
 
 bot = telebot.TeleBot(apikey3)
-bnc_conn = Binance_connect(api_key=sub1_api_key, api_secret=sub1_api_secret)
+# Enable connector file logging if enabled in config (same flag as verbose calc logging)
+# Note: config loaded below; create bnc_conn after config is available
 
 config = bf.load_config('config_5m_rm.json')
 chat_id = 234637822
+
+bnc_conn = Binance_connect(
+	api_key=sub1_api_key,
+	api_secret=sub1_api_secret,
+	log_to_file=config['general'].get('enable_trade_calc_logging', False),
+	log_file_path='logs/binance_connector.log',
+)
+
+# Put real bank to config for dynamic pairs filtering
+try:
+	config['general']['dynamic_pairs_bank'] = bnc_conn.get_usdt_balance(balance_type='wallet')
+	print(f"Dynamic pairs filter bank_usdt={config['general']['dynamic_pairs_bank']}")
+except Exception as ex:
+	print('Failed to fetch wallet balance for dynamic pairs filter:', ex)
+	config['general']['dynamic_pairs_bank'] = config['general'].get('initial_bank_for_test_stats', 0)
+
+# init fast backend
+enable_fast_backend(use_fast=bool(config['general'].get('use_fast_data', False)),
+				  timeframes=bf.define_checked_timeframes(config['general']['timeframes_used'][:], config['general']['trading_timeframe']),
+				  basic_candle_depth=config['general']['basic_candle_depth'],
+				  futures=True)
 
 db = DB_handler(config["general"]["db_file_name"])
 db.setup()
@@ -38,6 +61,11 @@ checked_timeframes = bf.define_checked_timeframes(config['general']['timeframes_
 limit = config['levels']['candle_depth']  # Limit of candles requested 
 basic_candle_depth = config['general']['basic_candle_depth'] # number of candles to check for each checked timeframe
 deal_config = config['deal_config']     # config for deal estimation
+# propagate centralized logging flag into deal_config for modules using it
+try:
+	deal_config['enable_trade_calc_logging'] = bool(config['general'].get('enable_trade_calc_logging', False))
+except Exception:
+	pass
 reverse = deal_config['cool_down_reverse']      # config of counting lost deals reverse or direct
 
 cd = Cooldown(config['deal_config'], db, bot, chat_id, reverse=reverse)   
@@ -75,12 +103,19 @@ def all_stats(message):
     bot.send_message(message.chat.id, text=mess_text)
 
 
+def _get_df(pair: str, timeframe: str) -> pd.DataFrame:
+    if config['general'].get('use_fast_data'):
+        return fast_get_ohlcv(pair, timeframe, limit=basic_candle_depth[timeframe], futures=True)
+    else:
+        return bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe], futures=True)
+
+
 def check_pair(bot, chat_id, pair: str):
 
     levels = []       # list of levels of all checked timeframes at current moment
 
     for timeframe in checked_timeframes:
-        df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe])
+        df = _get_df(pair, timeframe)
         if timeframe == trading_timeframe:
             last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
             basic_tf_ohlvc_df = df
@@ -109,6 +144,50 @@ def check_pair(bot, chat_id, pair: str):
             deal.pair = pair
             
             db.add_deal(deal)
+                        
+            # РАЗМЕЩЕНИЕ РЕАЛЬНОЙ СДЕЛКИ НА БИНАНС
+            
+            # дистанция активации трейлинга в доле от дистанции до стопа в процентах
+            trailing_activation_part = config['deal_config']['trailing_activation_of_stop_price']
+            # протяжка трейлинга в доле от дистанции до стопа в процентах
+            trailing_callback_part = config['deal_config']['trailing_callback_percent_of_stop_price']
+                        
+            if deal.direction == 'long':
+                trailing_activation_price = deal.entry_price * (1 + trailing_activation_part * deal.stop_dist_perc / 100)
+                trailing_callback_percent = round(trailing_callback_part * deal.stop_dist_perc, 1)
+                side = 'BUY'
+                
+                print(side)
+                print(f'{trailing_activation_price=}')
+                print(f'{trailing_callback_percent=}')
+            else:
+                trailing_activation_price = deal.entry_price * (1 - trailing_activation_part * deal.stop_dist_perc / 100)
+                trailing_callback_percent = round(trailing_callback_part * deal.stop_dist_perc, 1)
+                side = 'SELL'
+                
+                print(side)
+                print(f'{trailing_activation_price=}')
+                print(f'{trailing_callback_percent=}')
+                        
+                      
+            result = bnc_conn.place_futures_order_with_protection(
+                symbol=deal.pair,
+                side=side,
+                entry_price=deal.entry_price,
+                deviation_percent=0.1,
+                stop_loss_price=deal.stop_price,
+                trailing_activation_price=trailing_activation_price,
+                trailing_callback_percent=trailing_callback_percent,
+                leverage=config['deal_config']['leverage'],
+                risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],        # банк будет прочитан через account()
+                verbose=config['general'].get('enable_trade_calc_logging', False),
+            )
+
+            if result.success:
+                print("OK")
+            else:
+                print("ERROR:", result.message, result.error_code)
+                
             
             deal_message = f"""
             Найдена сделка:
@@ -122,50 +201,10 @@ def check_pair(bot, chat_id, pair: str):
             Профит-лосс: {deal.profit_loss_ratio}
             Дистанция до тейка: {deal.take_dist_perc}%
             Дистанция до стопа: {deal.stop_dist_perc}%
-            """
-            
-            # РАЗМЕЩЕНИЕ РЕАЛЬНОЙ СДЕЛКИ НА БИНАНС
-            
-            # дистанция активации трейлинга в доле от дистанции до стопа в процентах
-            trailing_activation_part = config['deal_config']['trailing_activation_of_stop_price']
-            # протяжка трейлинга в доле от дистанции до стопа в процентах
-            trailing_callback_part = config['deal_config']['trailing_callback_percent_of_stop_price']
                         
-            if deal.direction == 'LONG':
-                trailing_activation_price = deal.entry_price * (1 + trailing_activation_part * deal.stop_dist_perc / 100)
-                trailing_callback_percent = trailing_callback_part * deal.stop_dist_perc / 100
-                side = 'BUY'
-                
-                print(side)
-                print(f'{trailing_activation_price=}')
-                print(f'{trailing_callback_percent=}')
-            else:
-                trailing_activation_price = deal.entry_price * (1 - trailing_activation_part * deal.stop_dist_perc / 100)
-                trailing_callback_percent = trailing_callback_part * deal.stop_dist_perc / 100
-                side = 'SELL'
-                
-                print(side)
-                print(f'{trailing_activation_price=}')
-                print(f'{trailing_callback_percent=}')
-                        
-                       
-            result = bnc_conn.place_futures_order_with_protection(
-                symbol=deal.pair,
-                side=side,
-                entry_price=deal.entry_price,
-                deviation_percent=0.1,
-                stop_loss_price=deal.stop_price,
-                trailing_activation_price=trailing_activation_price,
-                trailing_callback_percent=trailing_callback_percent,
-                leverage=config['deal_config']['leverage'],
-                risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],        # банк будет прочитан через account()
-                verbose=True,
-            )
-
-            if result.success:
-                print("OK")
-            else:
-                print("ERROR:", result.message, result.error_code)
+            Цена активации трейлинга: {af.r_signif(trailing_activation_price, 4)}
+            Протяжка трейлинга: {trailing_callback_percent}%            
+            """    
             
             bot.send_message(chat_id, text = deal_message)    
         else:
@@ -186,6 +225,9 @@ def check_pair(bot, chat_id, pair: str):
             Профит-лосс: {deal.profit_loss_ratio}
             Дистанция до тейка: {deal.take_dist_perc}%
             Дистанция до стопа: {deal.stop_dist_perc}%
+            
+            Цена активации трейлинга: {af.r_signif(trailing_activation_price, 4)}
+            Протяжка трейлинга: {trailing_callback_percent}%
             
             <b>Но активна пауза с {cooldown_start_time} по {cooldown_finish_time}</b>
             """
@@ -226,7 +268,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
         print(f'\nChecking active deals at {dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")}')
     elif not minute_flag:
         print(dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S'))
-        bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}")   
+        bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}" )   
     
     if not minute_flag:
         for pair in trading_pairs:
@@ -242,7 +284,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
     elif minute_flag:
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
         
-            
+                    
                 
         
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
@@ -254,7 +296,11 @@ def main_func(trading_pairs: list, minute_flag: bool):
 #     schedule.run_pending()
 #     time.sleep(1)
 
-sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule, kwargs = {'timeframe':trading_timeframe, 
+if config['general'].get('use_dynamic_trading_pairs'):
+    sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule_dynamic, kwargs = {'timeframe':trading_timeframe, 
+                                                    'task':main_func, 'config':config}, daemon = True)
+else:
+    sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule, kwargs = {'timeframe':trading_timeframe, 
                                                     'task':main_func, 'trading_pairs':trading_pairs}, daemon = True)
     
 if __name__ == '__main__':

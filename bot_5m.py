@@ -36,6 +36,11 @@ checked_timeframes = bf.define_checked_timeframes(config['general']['timeframes_
 limit = config['levels']['candle_depth']  # Limit of candles requested 
 basic_candle_depth = config['general']['basic_candle_depth'] # number of candles to check for each checked timeframe
 deal_config = config['deal_config']     # config for deal estimation
+# propagate centralized logging flag into deal_config for modules using it
+try:
+	deal_config['enable_trade_calc_logging'] = bool(config['general'].get('enable_trade_calc_logging', False))
+except Exception:
+	pass
 reverse = deal_config['cool_down_reverse']      # config of counting lost deals reverse or direct
 
 cd = Cooldown(config['deal_config'], db, bot, chat_id, reverse=reverse)   
@@ -78,7 +83,7 @@ def check_pair(bot, chat_id, pair: str):
     levels = []       # list of levels of all checked timeframes at current moment
 
     for timeframe in checked_timeframes:
-        df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe])
+        df = bf.get_ohlcv_data_binance(pair, timeframe, limit=basic_candle_depth[timeframe], futures=True)
         if timeframe == trading_timeframe:
             last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
             basic_tf_ohlvc_df = df
@@ -181,7 +186,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
         print(f'\nChecking active deals at {dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")}')
     elif not minute_flag:
         print(dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S'))
-        bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}")   
+        bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}" )   
     
     if not minute_flag:
         for pair in trading_pairs:
@@ -197,7 +202,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
     elif minute_flag:
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
         
-            
+                    
                 
         
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
@@ -209,8 +214,8 @@ def main_func(trading_pairs: list, minute_flag: bool):
 #     schedule.run_pending()
 #     time.sleep(1)
 
-sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule, kwargs = {'timeframe':trading_timeframe, 
-                                                    'task':main_func, 'trading_pairs':trading_pairs}, daemon = True)
+sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule_dynamic, kwargs = {'timeframe':trading_timeframe, 
+                                                    'task':main_func, 'config':config}, daemon = True)
     
 if __name__ == '__main__':
     sсheduled_tasks_thread.start()

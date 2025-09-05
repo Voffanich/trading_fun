@@ -7,6 +7,10 @@
         "basic_candle_depths": [400, 250, 200, 100, 100, 55, 24],
         "basic_candle_depth": {"1m":400, "5m":288, "1h":240, "4h":100, "1d":365, "1w":56, "1M":24},
         "initial_bank_for_test_stats": 1000,
+        "use_dynamic_trading_pairs": true,
+        "dynamic_trading_pairs_top_n": 30,
+        "use_fast_data": true,
+        "enable_trade_calc_logging": true,
         "trading_pairs": [
             "BTCUSDT",
             "ETHUSDT",
@@ -58,7 +62,7 @@
         "profit_loss_ratio_max": 7.0,
         "take_distance_threshold": 7.0,
         "stop_distance_threshold": 0.6,
-        "deal_risk_perc_of_bank": 0.03,
+        "deal_risk_perc_of_bank": 3.0,
         "leverage_on": true,
         "leverage": 10,
         "deal_comission": 0.04,
@@ -70,11 +74,11 @@
         "max_one_direction_deals": 10,
         "direction_quantity_diff": 3,
         "max_deals_total": 16,
-        "max_deals_pair": 2,
+        "max_deals_pair": 1,
 
         "cool_down_check_period": 1,
         "cool_down_loss_quantity": 3,
-        "cool_down_length": 2,
+        "cool_down_length": 0.5,
         "cool_down_reverse" : false,
     
 
