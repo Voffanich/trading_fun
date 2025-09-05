@@ -18,7 +18,7 @@
   - CRUD и восстановление состояния при старте.
 - Конфиг (`config_5m_rm.json`):
   - `general.use_order_manager: true|false` — включение менеджера.
-  - `order_manager`: `{ "retries": 3, "backoff_sec": [0.5,1,2], "poll_interval_sec": 2, "placement_timeout_sec": 15, "max_slippage_pct": 0.2 }`.
+  - `order_manager`: `{ "retries": 3, "backoff_sec": [0.5,1,2], "poll_interval_sec": 2, "placement_timeout_sec": 15, "max_slippage_pct": 0.2, "unfilled_entry_ttl_sec": 0 }`.
 - Интеграция в `bot_5m_rm.py`:
   - После формирования сделки — вызов `OrderManager.place_managed_trade(...)` вместо прямого размещения.
   - В минутном цикле — `OrderManager.watch_and_cleanup()`.
