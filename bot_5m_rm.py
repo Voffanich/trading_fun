@@ -309,6 +309,12 @@ def main_func(trading_pairs: list, minute_flag: bool):
             
     elif minute_flag:
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
+        if order_manager_enabled and om:
+            try:
+                for sym in db.get_active_deals_list():
+                    om.watch_and_cleanup(sym, verbose=False)
+            except Exception as ex:
+                print('OrderManager cleanup error:', ex)
         
                     
                 

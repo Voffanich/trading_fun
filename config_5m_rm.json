@@ -98,6 +98,6 @@
         "poll_interval_sec": 2,
         "placement_timeout_sec": 15,
         "max_slippage_pct": 0.2,
-        "unfilled_entry_ttl_sec": 0
+        "unfilled_entry_ttl_sec": 180
     }
 }
