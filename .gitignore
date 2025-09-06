@@ -135,3 +135,6 @@ dmypy.json
 /archive
 
 test.py
+deals_1h.sqlite
+deals_5m_rm.sqlite
+deals_5m.sqlite
