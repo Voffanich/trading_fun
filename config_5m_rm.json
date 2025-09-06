@@ -85,8 +85,8 @@
 
         "indicators_validation": true,
         "indicators": {
-            "RSI_long": 60,
-            "RSI_short": 40,
+            "RSI_long": 51,
+            "RSI_short": 49,
             "BB_long": false,
             "BB_short": false,
             "MACD_long": false,
