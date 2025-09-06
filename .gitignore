@@ -136,4 +136,7 @@ dmypy.json
 
 test.py
 
-.sqlite
+*.sqlite
+deals_1h.sqlite
+deals_5m_rm.sqlite
+deals_5m.sqlite
