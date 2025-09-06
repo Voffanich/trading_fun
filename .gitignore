@@ -135,3 +135,11 @@ dmypy.json
 /archive
 
 test.py
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+deals_*.sqlite
+deals_*.db
