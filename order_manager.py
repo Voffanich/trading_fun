@@ -13,6 +13,7 @@ class OrderManager:
 	def __init__(self, bnc: Binance_connect, config: Dict[str, Any]):
 		self.bnc = bnc
 		self.cfg = config.get("order_manager", {})
+		self.deal_cfg = config.get("deal_config", {})
 		self.retries: int = int(self.cfg.get("retries", 3))
 		self.backoff: List[float] = self.cfg.get("backoff_sec", [0.5, 1, 2])
 		self.poll_interval: float = float(self.cfg.get("poll_interval_sec", 2))
