@@ -259,6 +259,15 @@ class Binance_connect:
 			self._log(True, "get_nonzero_position_symbols failed", {"error": getattr(e, "error_message", str(e))})
 			return []
 
+	def get_all_positions(self) -> list:
+		"""Return raw positions array from account()."""
+		try:
+			acc = self.client.account(recvWindow=self.recv_window_ms)
+			return acc.get("positions", []) or []
+		except ClientError as e:
+			self._log(True, "get_all_positions failed", {"error": getattr(e, "error_message", str(e))})
+			return []
+
 	# -------- Risk helpers --------
 	def derive_quantity(self, *, notional_usdt: Optional[float], entry_price: float, step_size: float, min_qty: float) -> float:
 		if notional_usdt is None:

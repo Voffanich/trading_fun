@@ -311,7 +311,19 @@ def main_func(trading_pairs: list, minute_flag: bool):
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
         if order_manager_enabled and om:
             try:
-                # Candidate symbols: non-zero positions ∪ DB active deals ∪ configured pairs
+                # Diagnostics: dump all positions
+                try:
+                    positions = bnc_conn.get_all_positions()
+                    print("Positions (raw):")
+                    for p in positions:
+                        try:
+                            print(p)
+                        except Exception:
+                            pass
+                except Exception as ex:
+                    print(f'Failed to fetch positions: {ex}')
+
+                # Candidate symbols: non-zero positions
                 symbols = set()
                 try:
                     for s in bnc_conn.get_nonzero_position_symbols():
@@ -319,29 +331,25 @@ def main_func(trading_pairs: list, minute_flag: bool):
                             symbols.add(s)
                 except Exception as ex:
                     print(f'Failed to get non-zero positions: {ex}')
-                try:
-                    for s in db.get_active_deals_list():
-                        if s:
-                            symbols.add(s)
-                except Exception as ex:
-                    print(f'Failed to get symbols from DB: {ex}')
-                if not symbols:
-                    for s in trading_pairs:
-                        symbols.add(s)
 
-                # Keep only symbols that actually have open orders OR a non-zero position
-                filtered = set()
-                for s in symbols:
+                # Print open orders for non-zero position symbols
+                for s in list(symbols):
                     try:
-                        pos = bnc_conn.get_position(s)
-                        amt = abs(float(pos.get('positionAmt', 0))) if pos else 0.0
-                        open_ord = bnc_conn.get_open_orders(s)
-                        if amt > 0 or (isinstance(open_ord, list) and len(open_ord) > 0):
-                            filtered.add(s)
-                    except Exception:
-                        continue
+                        oo = bnc_conn.get_open_orders(s)
+                        print(f'Open orders for {s}: {oo}')
+                    except Exception as ex:
+                        print(f'Failed to get open orders for {s}: {ex}')
 
-                symbols = filtered or symbols
+                # Also scan configured pairs for stray open orders to catch garbage after close
+                for s in trading_pairs:
+                    try:
+                        oo = bnc_conn.get_open_orders(s)
+                        if isinstance(oo, list) and len(oo) > 0:
+                            symbols.add(s)
+                            print(f'Found stray open orders on {s}: {len(oo)}')
+                    except Exception:
+                        pass
+
                 print(f'OrderManager cleanup: {len(symbols)} symbols => {list(symbols)}')
                 for sym in symbols:
                     try:
