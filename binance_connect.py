@@ -651,3 +651,48 @@ class Binance_connect:
 				trailing_stop_order=None,
 				raw=orders_raw,
 			) 
+
+	# -------- Helpers to (re)place trailing only --------
+	def place_trailing_reduce_only(
+		self,
+		*,
+		symbol: str,
+		side: str,
+		activation_price: float,
+		callback_percent: float,
+		quantity: float,
+		position_side: str = "BOTH",
+		reduce_only: bool = True,
+		working_type: str = "MARK_PRICE",
+		verbose: bool = True,
+	) -> bool:
+		try:
+			# Load filters for formatting
+			symbol_info = self._get_symbol_info(symbol)
+			filters = self._get_filters(symbol_info)
+			pf = filters.get("PRICE_FILTER", {})
+			ls = filters.get("LOT_SIZE", {})
+			tick_size_str = str(pf.get("tickSize", "0.0001"))
+			step_size_str = str(ls.get("stepSize", "1"))
+			activation_str = self._format_by_step(self._round_price(float(activation_price), float(pf.get("tickSize", 0.0)) or 0.0), tick_size_str)
+			qty_str = self._format_by_step(self._round_qty(float(quantity), float(ls.get("stepSize", 0.0)) or 0.0, float(ls.get("minQty", 0.0)) or 0.0), step_size_str)
+			callback = self._clamp_callback_rate(callback_percent)
+			callback_str = format((Decimal(str(callback)).quantize(Decimal('0.1'), rounding=ROUND_DOWN)), 'f')
+			payload = {
+				"symbol": symbol,
+				"side": side.upper(),
+				"type": "TRAILING_STOP_MARKET",
+				"activationPrice": activation_str,
+				"callbackRate": callback_str,
+				"positionSide": position_side,
+				"recvWindow": self.recv_window_ms,
+				"quantity": qty_str,
+				"reduceOnly": reduce_only,
+			}
+			self._log(verbose, "Trailing (re)place payload", payload)
+			resp = self.client.new_order(**payload)
+			self._log(verbose, "Trailing (re)placed", {"orderId": resp.get("orderId"), "response": resp})
+			return True
+		except Exception as e:
+			self._log(True, "Trailing (re)place failed", {"symbol": symbol, "error": str(e)})
+			return False
