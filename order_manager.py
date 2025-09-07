@@ -155,6 +155,12 @@ class OrderManager:
 					for o in prot_orders:
 						order_id = o.get("orderId")
 						self.bnc.cancel_order(symbol, order_id=order_id)
+					# re-fetch to verify protections are gone; if not, fallback to cancel-all
+					recheck = self.bnc.get_open_orders(symbol)
+					recheck_prot = [o for o in recheck if (o.get("type") in ("STOP_MARKET", "TRAILING_STOP_MARKET") and o.get("orderId"))]
+					if recheck_prot:
+						self._log("cleanup_protections_fallback", {"symbol": symbol, "remaining": len(recheck_prot)})
+						self.bnc.cancel_all_open_orders(symbol)
 				
 				# Enforce TTL for unfilled entry limit orders
 				if self.entry_ttl_sec > 0 and entry_orders:
@@ -169,6 +175,12 @@ class OrderManager:
 						for o in entry_orders:
 							order_id = o.get("orderId")
 							self.bnc.cancel_order(symbol, order_id=order_id)
+						# verify entries are gone; if не ушли, попробуем cancel_all ещё раз
+						post_ttl = self.bnc.get_open_orders(symbol)
+						post_ttl_entries = [o for o in post_ttl if (o.get("type") == "LIMIT" and o.get("orderId"))]
+						if post_ttl_entries:
+							self._log("entry_ttl_fallback_cancel_all", {"symbol": symbol, "remaining": len(post_ttl_entries)})
+							self.bnc.cancel_all_open_orders(symbol)
 				return
 
 			# Position exists: ensure at least one protective order is present

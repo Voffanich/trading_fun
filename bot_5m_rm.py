@@ -311,8 +311,8 @@ def main_func(trading_pairs: list, minute_flag: bool):
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
         if order_manager_enabled and om:
             try:
-                # cleanup per symbols seen in DB + any symbols with open orders but no DB deals
-                symbols = set(db.get_active_deals_list())
+                # Orchestrate strictly by exchange: collect symbols only from open orders on Binance
+                symbols = set()
                 try:
                     all_orders = bnc_conn.get_all_open_orders()
                     for o in all_orders:
@@ -321,11 +321,11 @@ def main_func(trading_pairs: list, minute_flag: bool):
                             symbols.add(symbol)
                 except Exception as ex:
                     print(f'Failed to get all open orders: {ex}')
-                
-                print(f'OrderManager cleanup: processing {len(symbols)} symbols: {list(symbols)}')
+
+                print(f'OrderManager cleanup (exchange-driven): {len(symbols)} symbols => {list(symbols)}')
                 for sym in symbols:
                     try:
-                        om.watch_and_cleanup(sym, verbose=True)  # включим verbose для отладки
+                        om.watch_and_cleanup(sym, verbose=True)
                     except Exception as sym_ex:
                         print(f'OrderManager cleanup error for {sym}: {sym_ex}')
             except Exception as ex:
