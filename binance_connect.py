@@ -242,6 +242,23 @@ class Binance_connect:
 			self._log(True, "get_position failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
 			return None
 
+	def get_nonzero_position_symbols(self) -> list:
+		"""Return list of symbols with non-zero absolute positionAmt."""
+		try:
+			acc = self.client.account(recvWindow=self.recv_window_ms)
+			symbols = []
+			for p in acc.get("positions", []):
+				try:
+					amt = float(p.get("positionAmt", 0) or 0)
+					if abs(amt) > 0:
+						symbols.append(p.get("symbol"))
+				except Exception:
+					continue
+			return symbols
+		except ClientError as e:
+			self._log(True, "get_nonzero_position_symbols failed", {"error": getattr(e, "error_message", str(e))})
+			return []
+
 	# -------- Risk helpers --------
 	def derive_quantity(self, *, notional_usdt: Optional[float], entry_price: float, step_size: float, min_qty: float) -> float:
 		if notional_usdt is None:
