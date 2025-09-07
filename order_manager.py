@@ -152,25 +152,10 @@ class OrderManager:
 				})
 
 			if qty == 0:
-				# No position: protective orders should not hang, but entry may wait until TTL
+				# No position: protective orders should not hang; use cancel-all to avoid missing IDs
 				if prot_orders:
 					self._log("cleanup_stray_protections", {"symbol": symbol, "count": len(prot_orders)})
-					for o in prot_orders:
-						order_id = o.get("orderId")
-						client_oid = o.get("clientOrderId")
-						self._log("cancel_protection_attempt", {"symbol": symbol, "type": o.get("type"), "orderId": order_id, "clientOrderId": client_oid})
-						try:
-							ok = self.bnc.cancel_order(symbol, order_id=order_id, client_order_id=client_oid)
-							if not ok:
-								self._log("cancel_protection_skipped", {"symbol": symbol, "orderId": order_id, "clientOrderId": client_oid})
-						except Exception as ce:
-							self._log("cancel_protection_error", {"symbol": symbol, "error": str(ce), "orderId": order_id, "clientOrderId": client_oid})
-					# re-fetch to verify protections are gone; if not, fallback to cancel-all
-					recheck = self.bnc.get_open_orders(symbol)
-					recheck_prot = [o for o in recheck if (o.get("type") in ("STOP_MARKET", "TRAILING_STOP_MARKET") and o.get("orderId"))]
-					if recheck_prot:
-						self._log("cleanup_protections_fallback", {"symbol": symbol, "remaining": len(recheck_prot)})
-						self.bnc.cancel_all_open_orders(symbol)
+					self.bnc.cancel_all_open_orders(symbol)
 				
 				# Enforce TTL for unfilled entry limit orders
 				if self.entry_ttl_sec > 0 and entry_orders:
@@ -182,22 +167,9 @@ class OrderManager:
 							oldest_ms = ms
 					if oldest_ms and now_ms - oldest_ms > self.entry_ttl_sec * 1000:
 						self._log("entry_ttl_expired", {"symbol": symbol, "ttl_sec": self.entry_ttl_sec, "open_entries": len(entry_orders)})
-						for o in entry_orders:
-							order_id = o.get("orderId")
-							client_oid = o.get("clientOrderId")
-							self._log("cancel_entry_attempt", {"symbol": symbol, "orderId": order_id, "clientOrderId": client_oid})
-							try:
-								ok = self.bnc.cancel_order(symbol, order_id=order_id, client_order_id=client_oid)
-								if not ok:
-									self._log("cancel_entry_skipped", {"symbol": symbol, "orderId": order_id, "clientOrderId": client_oid})
-							except Exception as ce:
-								self._log("cancel_entry_error", {"symbol": symbol, "error": str(ce), "orderId": order_id, "clientOrderId": client_oid})
-						# verify entries are gone; if не ушли, попробуем cancel_all ещё раз
-						post_ttl = self.bnc.get_open_orders(symbol)
-						post_ttl_entries = [o for o in post_ttl if (o.get("type") == "LIMIT" and o.get("orderId"))]
-						if post_ttl_entries:
-							self._log("entry_ttl_fallback_cancel_all", {"symbol": symbol, "remaining": len(post_ttl_entries)})
-							self.bnc.cancel_all_open_orders(symbol)
+						# Use cancel-all to ensure removal of stale LIMITs if TTL expired
+						self._log("entry_ttl_fallback_cancel_all", {"symbol": symbol, "open_entries": len(entry_orders)})
+						self.bnc.cancel_all_open_orders(symbol)
 				return
 
 			# Position exists: ensure at least one protective order is present
