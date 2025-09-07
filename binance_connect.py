@@ -184,18 +184,35 @@ class Binance_connect:
 			self._log(True, "get_order failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
 			return None
 
-	def cancel_order(self, symbol: str, *, order_id: Optional[int] = None, client_order_id: Optional[str] = None) -> bool:
+	def cancel_order(self, symbol: str, *, order_id: Optional[Any] = None, client_order_id: Optional[str] = None) -> bool:
+		"""Cancel by numeric orderId or string clientOrderId; safely ignore empty/invalid IDs."""
+		def _is_valid_order_id(oid: Optional[Any]) -> bool:
+			if oid is None:
+				return False
+			# allow numeric > 0 or non-empty digit string
+			if isinstance(oid, int):
+				return oid > 0
+			if isinstance(oid, str):
+				return oid.strip().isdigit()
+			return False
 		try:
-			if order_id is not None and order_id != 0:
-				self.client.cancel_order(symbol=symbol, orderId=order_id)
-			elif client_order_id is not None and client_order_id.strip():
+			if _is_valid_order_id(order_id):
+				self._log(True, "cancel_order attempt", {"symbol": symbol, "order_id": order_id})
+				self.client.cancel_order(symbol=symbol, orderId=int(order_id))
+				return True
+			elif client_order_id is not None and isinstance(client_order_id, str) and client_order_id.strip():
+				self._log(True, "cancel_order attempt by clientOrderId", {"symbol": symbol, "client_order_id": client_order_id})
 				self.client.cancel_order(symbol=symbol, origClientOrderId=client_order_id)
+				return True
 			else:
 				self._log(True, "cancel_order skipped", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "reason": "empty or invalid ID"})
 				return False
-			return True
 		except ClientError as e:
 			self._log(True, "cancel_order failed", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "error": getattr(e, "error_message", str(e))})
+			return False
+		except Exception as e:
+			# Catch TypeError like: orderId is mandatory, but received empty
+			self._log(True, "cancel_order failed (unexpected)", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "error": str(e)})
 			return False
 
 	def cancel_all_open_orders(self, symbol: str) -> bool:
