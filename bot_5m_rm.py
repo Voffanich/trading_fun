@@ -120,7 +120,7 @@ def check_pair(bot, chat_id, pair: str):
     for timeframe in checked_timeframes:
         df = _get_df(pair, timeframe)
         if timeframe == trading_timeframe:
-            last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
+            last_candle = (df.iloc[-1])    # Use the latest closed candle (schedule guarantees closure)
             basic_tf_ohlvc_df = df
         levels += lv.find_levels(df, timeframe)
     # time.sleep(0.5)
