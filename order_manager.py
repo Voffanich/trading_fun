@@ -159,9 +159,12 @@ class OrderManager:
 						order_id = o.get("orderId")
 						client_oid = o.get("clientOrderId")
 						self._log("cancel_protection_attempt", {"symbol": symbol, "type": o.get("type"), "orderId": order_id, "clientOrderId": client_oid})
-						ok = self.bnc.cancel_order(symbol, order_id=order_id, client_order_id=client_oid)
-						if not ok:
-							self._log("cancel_protection_skipped", {"symbol": symbol, "orderId": order_id, "clientOrderId": client_oid})
+						try:
+							ok = self.bnc.cancel_order(symbol, order_id=order_id, client_order_id=client_oid)
+							if not ok:
+								self._log("cancel_protection_skipped", {"symbol": symbol, "orderId": order_id, "clientOrderId": client_oid})
+						except Exception as ce:
+							self._log("cancel_protection_error", {"symbol": symbol, "error": str(ce), "orderId": order_id, "clientOrderId": client_oid})
 					# re-fetch to verify protections are gone; if not, fallback to cancel-all
 					recheck = self.bnc.get_open_orders(symbol)
 					recheck_prot = [o for o in recheck if (o.get("type") in ("STOP_MARKET", "TRAILING_STOP_MARKET") and o.get("orderId"))]
@@ -183,9 +186,12 @@ class OrderManager:
 							order_id = o.get("orderId")
 							client_oid = o.get("clientOrderId")
 							self._log("cancel_entry_attempt", {"symbol": symbol, "orderId": order_id, "clientOrderId": client_oid})
-							ok = self.bnc.cancel_order(symbol, order_id=order_id, client_order_id=client_oid)
-							if not ok:
-								self._log("cancel_entry_skipped", {"symbol": symbol, "orderId": order_id, "clientOrderId": client_oid})
+							try:
+								ok = self.bnc.cancel_order(symbol, order_id=order_id, client_order_id=client_oid)
+								if not ok:
+									self._log("cancel_entry_skipped", {"symbol": symbol, "orderId": order_id, "clientOrderId": client_oid})
+							except Exception as ce:
+								self._log("cancel_entry_error", {"symbol": symbol, "error": str(ce), "orderId": order_id, "clientOrderId": client_oid})
 						# verify entries are gone; if не ушли, попробуем cancel_all ещё раз
 						post_ttl = self.bnc.get_open_orders(symbol)
 						post_ttl_entries = [o for o in post_ttl if (o.get("type") == "LIMIT" and o.get("orderId"))]
@@ -240,5 +246,5 @@ class OrderManager:
 					return
 		except Exception as e:
 			self._log("watch_and_cleanup_error", {"symbol": symbol, "error": str(e)})
-			raise
+			return
 
