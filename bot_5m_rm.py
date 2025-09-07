@@ -308,6 +308,7 @@ def main_func(trading_pairs: list, minute_flag: bool):
                 continue
             
     elif minute_flag:
+        print(f"[OM heartbeat] minute cleanup tick at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}")
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
         if order_manager_enabled and om:
             try:
