@@ -139,6 +139,8 @@ class OrderManager:
 			# classify - фильтруем только валидные ордера с orderId
 			entry_orders = [o for o in open_orders if (o.get("type") == "LIMIT" and o.get("orderId"))]
 			prot_orders = [o for o in open_orders if (o.get("type") in ("STOP_MARKET", "TRAILING_STOP_MARKET") and o.get("orderId"))]
+			trailing_present = any(o.get("type") == "TRAILING_STOP_MARKET" for o in prot_orders)
+			stop_order = next((o for o in open_orders if o.get("type") == "STOP_MARKET"), None)
 			
 			if verbose:
 				self._log("cleanup_debug", {
@@ -193,10 +195,49 @@ class OrderManager:
 				return
 
 			# Position exists: ensure at least one protective order is present
-			if not prot_orders:
-				self._log("no_protection", {"symbol": symbol})
-				# best-effort: if we can infer qty from position, we could re-arm a STOP_MARKET here
-				return
+			if not prot_orders or not trailing_present:
+				try:
+					pos_full = self.bnc.get_position(symbol) or {}
+					entry_price_pos = float(pos_full.get("entryPrice", 0) or 0)
+					qty_signed = float(pos_full.get("positionAmt", 0) or 0)
+					qty_abs = abs(qty_signed)
+					if qty_abs <= 0:
+						self._log("no_protection_qty_zero", {"symbol": symbol})
+						return
+
+					# If trailing is missing, try to re-arm it using config and distance to STOP
+					if not trailing_present and stop_order and entry_price_pos > 0:
+						try:
+							stop_price_val = float(stop_order.get("stopPrice")) if stop_order.get("stopPrice") else 0.0
+							if stop_price_val > 0 and entry_price_pos > 0:
+								stop_dist_perc = abs(entry_price_pos - stop_price_val) / entry_price_pos * 100.0
+								act_part = float(self.deal_cfg.get('trailing_activation_of_stop_price', 0))
+								cb_part = float(self.deal_cfg.get('trailing_callback_percent_of_stop_price', 0))
+								if qty_signed > 0:
+									activation = entry_price_pos * (1 + act_part * stop_dist_perc / 100.0)
+									side = "SELL"
+								else:
+									activation = entry_price_pos * (1 - act_part * stop_dist_perc / 100.0)
+									side = "BUY"
+								callback = round(cb_part * stop_dist_perc, 1)
+								self._log("rearm_trailing_attempt", {"symbol": symbol, "entry": entry_price_pos, "stop": stop_price_val, "activation": activation, "callback": callback, "qty": qty_abs, "side": side})
+								ok_tr = self.bnc.place_trailing_reduce_only(
+									symbol=symbol,
+									side=side,
+									activation_price=activation,
+									callback_percent=callback,
+									quantity=qty_abs,
+									position_side="BOTH",
+									reduce_only=True,
+									verbose=True,
+								)
+								self._log("rearm_trailing_result", {"symbol": symbol, "success": ok_tr})
+						except Exception as ex:
+							self._log("rearm_trailing_error", {"symbol": symbol, "error": str(ex)})
+					return
+				except Exception as ex:
+					self._log("no_protection_error", {"symbol": symbol, "error": str(ex)})
+					return
 		except Exception as e:
 			self._log("watch_and_cleanup_error", {"symbol": symbol, "error": str(e)})
 			raise
