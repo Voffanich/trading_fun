@@ -165,6 +165,10 @@ class Binance_connect:
 		"""Return all open orders across symbols (UMFutures supports no-symbol call)."""
 		try:
 			return self.client.get_open_orders()
+		except TypeError as e:
+			# Some client versions require a symbol. We'll log and return empty to allow caller fallback.
+			self._log(True, "get_all_open_orders unsupported without symbol", {"error": str(e)})
+			return []
 		except ClientError as e:
 			self._log(True, "get_all_open_orders failed", {"error": getattr(e, "error_message", str(e))})
 			return []
