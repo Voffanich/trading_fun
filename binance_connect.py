@@ -155,10 +155,19 @@ class Binance_connect:
 
 	# -------- Public helpers for orders and positions --------
 	def get_open_orders(self, symbol: str) -> list:
+		"""Return open orders for a symbol. Be tolerant to SDK method/name differences."""
+		# Try primary name
 		try:
 			return self.client.get_open_orders(symbol=symbol)
-		except ClientError as e:
-			self._log(True, "get_open_orders failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+		except Exception as e1:
+			self._log(True, "get_open_orders primary failed", {"symbol": symbol, "error": str(e1)})
+			# Try alternate method name if exists
+			try:
+				alt = getattr(self.client, "open_orders", None)
+				if callable(alt):
+					return alt(symbol=symbol)
+			except Exception as e2:
+				self._log(True, "get_open_orders alternate failed", {"symbol": symbol, "error": str(e2)})
 			return []
 
 	def get_all_open_orders(self) -> list:
