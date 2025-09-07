@@ -200,7 +200,7 @@ def check_pair(bot, chat_id, pair: str):
                     symbol=deal.pair,
                     side=side,
                     entry_price=deal.entry_price,
-                    deviation_percent=0.05,
+                    deviation_percent=0.02,
                     stop_loss_price=deal.stop_price,
                     trailing_activation_price=trailing_activation_price,
                     trailing_callback_percent=trailing_callback_percent,
