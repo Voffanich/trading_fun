@@ -65,7 +65,7 @@
         "profit_loss_ratio_max": 20.0,
         "take_distance_threshold": 20.0,
         "stop_distance_threshold": 0.5,
-        "deal_risk_perc_of_bank": 1.0,
+        "deal_risk_perc_of_bank": 2.0,
         "leverage_on": true,
         "leverage": 20,
         "deal_comission": 0.04,
