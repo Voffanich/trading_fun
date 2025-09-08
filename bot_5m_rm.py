@@ -45,6 +45,7 @@ try:
 		bank_available = bnc_conn.get_usdt_balance(balance_type='available')
 	except Exception:
 		bank_available = 0.0
+	print(f"PM balances: available={bank_available}, wallet={bank_wallet}")
 	config['general']['dynamic_pairs_bank'] = bank_available or bank_wallet or config['general'].get('initial_bank_for_test_stats', 0)
 	print(f"Dynamic pairs filter bank_usdt={config['general']['dynamic_pairs_bank']}")
 except Exception as ex:

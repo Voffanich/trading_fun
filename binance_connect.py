@@ -464,12 +464,26 @@ class Binance_connect:
 					return self._safe_float(val)
 			# If we are in PM and assets didn't return USDT, use top-level fallbacks
 			if self.api_mode == "pm":
+				candidate = None
 				if balance_type == "available" and top_available > 0:
-					return top_available
-				# prefer margin/equity if present; else wallet
-				if top_margin > 0:
-					return top_margin
-				return top_wallet
+					candidate = top_available
+				elif top_margin > 0:
+					candidate = top_margin
+				elif top_wallet > 0:
+					candidate = top_wallet
+				if candidate and candidate > 0:
+					return candidate
+				# Fallback to classic account if PM returned zeros/empty
+				try:
+					classic = self.client.account(recvWindow=self.recv_window_ms)
+					for asset in (classic.get("assets", []) or []):
+						if asset.get("asset") == "USDT":
+							if balance_type == "available":
+								return self._safe_float(asset.get("availableBalance"))
+							val = asset.get("walletBalance") or asset.get("marginBalance")
+							return self._safe_float(val)
+				except Exception:
+					pass
 			raise RuntimeError("USDT asset not found in account assets")
 		except Exception as e:
 			self._write_file_log("account_error", {"error": str(e)})
