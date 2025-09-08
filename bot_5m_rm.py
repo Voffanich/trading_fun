@@ -340,57 +340,31 @@ def main_func(trading_pairs: list, minute_flag: bool):
                 continue
             
     elif minute_flag:
-        print(f"[OM heartbeat] minute cleanup tick at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}")
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
-        if order_manager_enabled and om:
+        # Disable verbose OM heartbeat/diagnostics; run cleanup only if explicitly enabled in config
+        if order_manager_enabled and om and bool(config['general'].get('enable_om_minute_cleanup', False)):
             try:
-                # Diagnostics: dump all positions
-                try:
-                    positions = bnc_conn.get_all_positions()
-                    print("Positions (raw):")
-                    for p in positions:
-                        try:
-                            print(p)
-                        except Exception:
-                            pass
-                except Exception as ex:
-                    print(f'Failed to fetch positions: {ex}')
-
-                # Candidate symbols: non-zero positions
                 symbols = set()
                 try:
                     for s in bnc_conn.get_nonzero_position_symbols():
                         if s:
                             symbols.add(s)
-                except Exception as ex:
-                    print(f'Failed to get non-zero positions: {ex}')
-
-                # Print open orders for non-zero position symbols
-                for s in list(symbols):
-                    try:
-                        oo = bnc_conn.get_open_orders(s)
-                        print(f'Open orders for {s}: {oo}')
-                    except Exception as ex:
-                        print(f'Failed to get open orders for {s}: {ex}')
-
-                # Also scan configured pairs for stray open orders to catch garbage after close
+                except Exception:
+                    pass
                 for s in trading_pairs:
                     try:
                         oo = bnc_conn.get_open_orders(s)
                         if isinstance(oo, list) and len(oo) > 0:
                             symbols.add(s)
-                            print(f'Found stray open orders on {s}: {len(oo)}')
                     except Exception:
                         pass
-
-                print(f'OrderManager cleanup: {len(symbols)} symbols => {list(symbols)}')
                 for sym in symbols:
                     try:
-                        om.watch_and_cleanup(sym, verbose=True)
-                    except Exception as sym_ex:
-                        print(f'OrderManager cleanup error for {sym}: {sym_ex}')
-            except Exception as ex:
-                print('OrderManager cleanup error:', ex)
+                        om.watch_and_cleanup(sym, verbose=False)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
         
                     
                 
