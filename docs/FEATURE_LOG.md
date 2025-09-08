@@ -13,6 +13,7 @@
 - Расширен `Binance_connect`:
   - Методы: `get_open_orders(symbol)`, `get_order(symbol, orderId|origClientOrderId)`, `cancel_order(...)`, `cancel_all_open_orders(symbol)`, `get_position(symbol)`, `get_mark_price(symbol)`.
   - Строгое форматирование чисел по `tickSize/stepSize` (Decimal) для избежания ошибок точности (-1111).
+  - Полная поддержка Portfolio Margin (PAPI) для UM: размещение/отмена ордеров (`/papi/v1/um/order`, `/papi/v1/um/allOpenOrders`), чтение `openOrders`, `premiumIndex`, `account`, смена плеча и типа маржи (`/papi/v1/um/leverage`, `/papi/v1/um/marginType`). Переключение через `general.futures_api_mode: classic|pm`.
 - Расширен `DB_handler`:
   - Таблица `exchange_orders` для хранения активных ордеров (mapping `deal_id ↔ clientOrderId/orderId`, тип, статус, цены, qty).
   - CRUD и восстановление состояния при старте.
