@@ -227,6 +227,13 @@ class Binance_connect:
 
 	def get_all_open_orders(self) -> list:
 		"""Return all open orders across symbols (UMFutures supports no-symbol call)."""
+		if self.api_mode == "pm":
+			try:
+				resp = self._pm_request("GET", "/papi/v1/um/openOrders", {})
+				return resp if isinstance(resp, list) else []
+			except Exception as e:
+				self._log(True, "get_all_open_orders failed (PM)", {"error": str(e)})
+				return []
 		try:
 			return self.client.get_open_orders()
 		except TypeError as e:
@@ -239,6 +246,16 @@ class Binance_connect:
 
 	def get_order(self, symbol: str, *, order_id: Optional[int] = None, client_order_id: Optional[str] = None) -> Optional[dict]:
 		try:
+			if self.api_mode == "pm":
+				params: Dict[str, Any] = {"symbol": symbol}
+				if order_id is not None:
+					params["orderId"] = order_id
+				elif client_order_id is not None:
+					params["origClientOrderId"] = client_order_id
+				else:
+					return None
+				resp = self._pm_request("GET", "/papi/v1/um/order", params)
+				return resp if isinstance(resp, dict) else None
 			if order_id is not None:
 				return self.client.get_order(symbol=symbol, orderId=order_id)
 			elif client_order_id is not None:
@@ -260,6 +277,18 @@ class Binance_connect:
 				return oid.strip().isdigit()
 			return False
 		try:
+			if self.api_mode == "pm":
+				params: Dict[str, Any] = {"symbol": symbol}
+				if _is_valid_order_id(order_id):
+					params["orderId"] = int(order_id)
+				elif client_order_id is not None and isinstance(client_order_id, str) and client_order_id.strip():
+					params["origClientOrderId"] = client_order_id
+				else:
+					self._log(True, "cancel_order skipped", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "reason": "empty or invalid ID"})
+					return False
+				self._log(True, "cancel_order attempt (PM)", {"symbol": symbol, "params": {k: v for k, v in params.items() if k != "symbol"}})
+				self._pm_request("DELETE", "/papi/v1/um/order", params)
+				return True
 			if _is_valid_order_id(order_id):
 				self._log(True, "cancel_order attempt", {"symbol": symbol, "order_id": order_id})
 				self.client.cancel_order(symbol=symbol, orderId=int(order_id))
@@ -280,6 +309,13 @@ class Binance_connect:
 			return False
 
 	def cancel_all_open_orders(self, symbol: str) -> bool:
+		if self.api_mode == "pm":
+			try:
+				self._pm_request("DELETE", "/papi/v1/um/allOpenOrders", {"symbol": symbol})
+				return True
+			except Exception as e:
+				self._log(True, "cancel_all_open_orders failed (PM)", {"symbol": symbol, "error": str(e)})
+				return False
 		try:
 			self.client.cancel_open_orders(symbol=symbol)
 			return True
@@ -479,6 +515,14 @@ class Binance_connect:
 
 	# -------- Account setup --------
 	def set_leverage(self, symbol: str, leverage: int) -> None:
+		# PM mode via PAPI
+		if self.api_mode == "pm":
+			try:
+				resp = self._pm_request("POST", "/papi/v1/um/leverage", {"symbol": symbol, "leverage": leverage})
+				self._write_file_log("change_leverage", {"symbol": symbol, "leverage": leverage, "response": resp})
+			except Exception as e:
+				raise RuntimeError(f"Failed to set leverage (PM): {e}")
+			return
 		try:
 			resp = self.client.change_leverage(symbol=symbol, leverage=leverage, recvWindow=self.recv_window_ms)
 			self._write_file_log("change_leverage", {"symbol": symbol, "leverage": leverage, "response": resp})
@@ -490,6 +534,14 @@ class Binance_connect:
 			raise RuntimeError(f"Failed to set leverage: {e}")
 
 	def set_margin_type(self, symbol: str, margin_type: str = "ISOLATED") -> None:
+		# PM mode via PAPI
+		if self.api_mode == "pm":
+			try:
+				resp = self._pm_request("POST", "/papi/v1/um/marginType", {"symbol": symbol, "marginType": margin_type})
+				self._write_file_log("change_margin_type", {"symbol": symbol, "margin_type": margin_type, "response": resp})
+			except Exception as e:
+				raise RuntimeError(f"Failed to set margin type (PM): {e}")
+			return
 		try:
 			resp = self.client.change_margin_type(symbol=symbol, marginType=margin_type, recvWindow=self.recv_window_ms)
 			self._write_file_log("change_margin_type", {"symbol": symbol, "margin_type": margin_type, "response": resp})
@@ -664,34 +716,59 @@ class Binance_connect:
 			self._log(verbose, "Validation passed", {"notional": (float(limit_price_str) if limit_price_str else entry_price) * float(qty_str)})
 
 			# 6) Place entry LIMIT order
-			entry_order = self.client.new_order(
-				symbol=symbol,
-				side=side.upper(),
-				type="LIMIT",
-				timeInForce=time_in_force,
-				quantity=qty_str,
-				price=limit_price_str,
-				positionSide=position_side,
-				recvWindow=self.recv_window_ms,
-			)
+			if self.api_mode == "pm":
+				payload_entry = {
+					"symbol": symbol,
+					"side": side.upper(),
+					"type": "LIMIT",
+					"timeInForce": time_in_force,
+					"quantity": qty_str,
+					"price": limit_price_str,
+					"positionSide": position_side,
+				}
+				entry_order = self._pm_request("POST", "/papi/v1/um/order", payload_entry)
+			else:
+				entry_order = self.client.new_order(
+					symbol=symbol,
+					side=side.upper(),
+					type="LIMIT",
+					timeInForce=time_in_force,
+					quantity=qty_str,
+					price=limit_price_str,
+					positionSide=position_side,
+					recvWindow=self.recv_window_ms,
+				)
 			orders_raw["entry"] = entry_order
 			self._log(verbose, "Entry order placed", {"orderId": entry_order.get("orderId"), "price": limit_price_str, "qty": qty_str, "response": entry_order})
 
 			# 7) Place Stop-Loss (STOP_MARKET reduceOnly)
 			stop_price = self._round_price(stop_loss_price, tick_size)
 			stop_price_str = self._format_by_step(stop_price, tick_size_str)
-			stop_order = self.client.new_order(
-				symbol=symbol,
-				side=("SELL" if side.upper() == "BUY" else "BUY"),
-				type="STOP_MARKET",
-				stopPrice=stop_price_str,
-				closePosition=False,
-				reduceOnly=reduce_only,
-				workingType=working_type,
-				quantity=qty_str,
-				positionSide=position_side,
-				recvWindow=self.recv_window_ms,
-			)
+			if self.api_mode == "pm":
+				stop_order = self._pm_request("POST", "/papi/v1/um/order", {
+					"symbol": symbol,
+					"side": ("SELL" if side.upper() == "BUY" else "BUY"),
+					"type": "STOP_MARKET",
+					"stopPrice": stop_price_str,
+					"closePosition": False,
+					"reduceOnly": reduce_only,
+					"workingType": working_type,
+					"quantity": qty_str,
+					"positionSide": position_side,
+				})
+			else:
+				stop_order = self.client.new_order(
+					symbol=symbol,
+					side=("SELL" if side.upper() == "BUY" else "BUY"),
+					type="STOP_MARKET",
+					stopPrice=stop_price_str,
+					closePosition=False,
+					reduceOnly=reduce_only,
+					workingType=working_type,
+					quantity=qty_str,
+					positionSide=position_side,
+					recvWindow=self.recv_window_ms,
+				)
 			orders_raw["stop"] = stop_order
 			self._log(verbose, "Stop-loss order placed", {"orderId": stop_order.get("orderId"), "stopPrice": stop_price_str, "response": stop_order})
 
@@ -700,20 +777,33 @@ class Binance_connect:
 			if take_profit_price is not None:
 				tp_price = self._round_price(float(take_profit_price), tick_size)
 				tp_price_str = self._format_by_step(tp_price, tick_size_str)
-				take_profit_order = self.client.new_order(
-					symbol=symbol,
-					side=("SELL" if side.upper() == "BUY" else "BUY"),
-					type="TAKE_PROFIT_MARKET",
-					stopPrice=tp_price_str,
-					closePosition=False,
-					reduceOnly=reduce_only,
-					workingType=working_type,
-					quantity=qty_str,
-					positionSide=position_side,
-					recvWindow=self.recv_window_ms,
-				)
+				if self.api_mode == "pm":
+					take_profit_order = self._pm_request("POST", "/papi/v1/um/order", {
+						"symbol": symbol,
+						"side": ("SELL" if side.upper() == "BUY" else "BUY"),
+						"type": "TAKE_PROFIT_MARKET",
+						"stopPrice": tp_price_str,
+						"closePosition": False,
+						"reduceOnly": reduce_only,
+						"workingType": working_type,
+						"quantity": qty_str,
+						"positionSide": position_side,
+					})
+				else:
+					take_profit_order = self.client.new_order(
+						symbol=symbol,
+						side=("SELL" if side.upper() == "BUY" else "BUY"),
+						type="TAKE_PROFIT_MARKET",
+						stopPrice=tp_price_str,
+						closePosition=False,
+						reduceOnly=reduce_only,
+						workingType=working_type,
+						quantity=qty_str,
+						positionSide=position_side,
+						recvWindow=self.recv_window_ms,
+					)
 				orders_raw["take_profit"] = take_profit_order
-				self._log(verbose, "Take-profit order placed", {"orderId": take_profit_order.get("orderId"), "tpPrice": tp_price_str, "response": take_profit_order})
+				self._log(verbose, "Take-profit order placed", {"orderId": (take_profit_order.get("orderId") if isinstance(take_profit_order, dict) else None), "tpPrice": tp_price_str, "response": take_profit_order})
 
 			# 9) Trailing Stop (TRAILING_STOP_MARKET)
 			activation = self._round_price(trailing_activation_price, tick_size)
@@ -752,9 +842,13 @@ class Binance_connect:
 			self._log(verbose, "Trailing payload", trailing_stop_payload)
 			trailing_stop_order = None
 			try:
-				trailing_stop_order = self.client.new_order(**trailing_stop_payload)
+				if self.api_mode == "pm":
+					pm_payload = {k: v for k, v in trailing_stop_payload.items() if k != "recvWindow"}
+					trailing_stop_order = self._pm_request("POST", "/papi/v1/um/order", pm_payload)
+				else:
+					trailing_stop_order = self.client.new_order(**trailing_stop_payload)
 				orders_raw["trailing_stop"] = trailing_stop_order
-				self._log(verbose, "Trailing-stop order placed", {"orderId": trailing_stop_order.get("orderId"), "response": trailing_stop_order})
+				self._log(verbose, "Trailing-stop order placed", {"orderId": (trailing_stop_order.get("orderId") if isinstance(trailing_stop_order, dict) else None), "response": trailing_stop_order})
 			except Exception as te:
 				# Non-fatal: keep entry and stop orders active; report in logs
 				self._log(True, "Trailing order failed (non-fatal)", {"error": str(te)})
@@ -826,8 +920,12 @@ class Binance_connect:
 				"reduceOnly": reduce_only,
 			}
 			self._log(verbose, "Trailing (re)place payload", payload)
-			resp = self.client.new_order(**payload)
-			self._log(verbose, "Trailing (re)placed", {"orderId": resp.get("orderId"), "response": resp})
+			if self.api_mode == "pm":
+				pm_payload = {k: v for k, v in payload.items() if k != "recvWindow"}
+				resp = self._pm_request("POST", "/papi/v1/um/order", pm_payload)
+			else:
+				resp = self.client.new_order(**payload)
+			self._log(verbose, "Trailing (re)placed", {"orderId": (resp.get("orderId") if isinstance(resp, dict) else None), "response": resp})
 			return True
 		except Exception as e:
 			self._log(True, "Trailing (re)place failed", {"symbol": symbol, "error": str(e)})
