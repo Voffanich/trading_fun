@@ -565,13 +565,10 @@ class Binance_connect:
 
 	# -------- Account setup --------
 	def set_leverage(self, symbol: str, leverage: int) -> None:
-		# PM mode via PAPI
+		# PM mode: leverage is effectively dynamic; changing it per-symbol is not supported reliably.
+		# Treat as no-op and just log.
 		if self.api_mode == "pm":
-			try:
-				resp = self._pm_request("POST", "/papi/v1/um/leverage", {"symbol": symbol, "leverage": leverage})
-				self._write_file_log("change_leverage", {"symbol": symbol, "leverage": leverage, "response": resp})
-			except Exception as e:
-				raise RuntimeError(f"Failed to set leverage (PM): {e}")
+			self._write_file_log("change_leverage_skipped_pm", {"symbol": symbol, "leverage": leverage, "note": "PM manages effective leverage; skipping change"})
 			return
 		try:
 			resp = self.client.change_leverage(symbol=symbol, leverage=leverage, recvWindow=self.recv_window_ms)
@@ -588,9 +585,8 @@ class Binance_connect:
 		# Treat request as no-op and enforce CROSSED semantics.
 		if self.api_mode == "pm":
 			mt = (margin_type or "CROSSED").upper()
-			if mt != "CROSSED":
-				raise RuntimeError("Portfolio Margin does not support ISOLATED margin; use CROSSED")
-			self._write_file_log("change_margin_type_skipped_pm", {"symbol": symbol, "margin_type": mt, "note": "PM enforces cross margin"})
+			# Force cross semantics silently; log for traceability
+			self._write_file_log("change_margin_type_skipped_pm", {"symbol": symbol, "requested": mt, "applied": "CROSSED", "note": "PM enforces cross margin"})
 			return
 		try:
 			resp = self.client.change_margin_type(symbol=symbol, marginType=margin_type, recvWindow=self.recv_window_ms)
