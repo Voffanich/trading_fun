@@ -324,15 +324,8 @@ class Binance_connect:
 			return False
 
 	def get_mark_price(self, symbol: str) -> Optional[float]:
-		if self.api_mode == "pm":
-			try:
-				mp = self._pm_request("GET", "/papi/v1/um/premiumIndex", {"symbol": symbol})
-				# returns list or dict; unify
-				if isinstance(mp, list) and mp:
-					mp = mp[0]
-				return float(mp.get("markPrice")) if isinstance(mp, dict) and mp.get("markPrice") is not None else None
-			except Exception:
-				return None
+		# In PM mode, the PAPI endpoint for premiumIndex may not be available.
+		# Use the classic UMFutures client which works regardless of margin mode.
 		try:
 			mp = self.client.mark_price(symbol=symbol)
 			return float(mp.get("markPrice")) if isinstance(mp, dict) and mp.get("markPrice") is not None else None
@@ -591,13 +584,13 @@ class Binance_connect:
 			raise RuntimeError(f"Failed to set leverage: {e}")
 
 	def set_margin_type(self, symbol: str, margin_type: str = "ISOLATED") -> None:
-		# PM mode via PAPI
+		# PM mode: Portfolio Margin does not support setting ISOLATED per-symbol.
+		# Treat request as no-op and enforce CROSSED semantics.
 		if self.api_mode == "pm":
-			try:
-				resp = self._pm_request("POST", "/papi/v1/um/marginType", {"symbol": symbol, "marginType": margin_type})
-				self._write_file_log("change_margin_type", {"symbol": symbol, "margin_type": margin_type, "response": resp})
-			except Exception as e:
-				raise RuntimeError(f"Failed to set margin type (PM): {e}")
+			mt = (margin_type or "CROSSED").upper()
+			if mt != "CROSSED":
+				raise RuntimeError("Portfolio Margin does not support ISOLATED margin; use CROSSED")
+			self._write_file_log("change_margin_type_skipped_pm", {"symbol": symbol, "margin_type": mt, "note": "PM enforces cross margin"})
 			return
 		try:
 			resp = self.client.change_margin_type(symbol=symbol, marginType=margin_type, recvWindow=self.recv_window_ms)
