@@ -313,9 +313,6 @@ def get_daily_dynamic_pairs_filtered(config: dict) -> list[str]:
 				config['general'].get('initial_bank_for_test_stats', 0)
 			)
 		)
-		# safeguard against zeros in PM mode
-		if bank_usdt <= 0:
-			bank_usdt = float(config['general'].get('initial_bank_for_test_stats', 0))
 		risk_percent = float(config['deal_config'].get('deal_risk_perc_of_bank', 0))
 		min_stop_perc = float(config['deal_config'].get('stop_distance_threshold', 0))
 		verbose = bool(config['general'].get('enable_trade_calc_logging', False))
