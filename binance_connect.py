@@ -109,6 +109,14 @@ class Binance_connect:
 			"X-MBX-PORTFOLIO-MARGIN": "true",
 		}
 
+	def _safe_float(self, value: Any, default: float = 0.0) -> float:
+		try:
+			if value is None:
+				return default
+			return float(value)
+		except Exception:
+			return default
+
 	def _sign(self, query_str: str) -> str:
 		sig = hmac.new(self.api_secret.encode(), query_str.encode(), hashlib.sha256).hexdigest()
 		return sig
@@ -402,9 +410,15 @@ class Binance_connect:
 			self._write_file_log("account", {"response": data})
 			for asset in data.get("assets", []):
 				if asset.get("asset") == "USDT":
+					# Prefer availableBalance if requested/exists, otherwise fallback to walletBalance or marginBalance
 					if balance_type == "available":
-						return float(asset.get("availableBalance"))
-					return float(asset.get("walletBalance"))
+						val = asset.get("availableBalance")
+						return self._safe_float(val)
+					# wallet: try walletBalance, fallback to marginBalance
+					val = asset.get("walletBalance")
+					if val is None:
+						val = asset.get("marginBalance")
+					return self._safe_float(val)
 			raise RuntimeError("USDT asset not found in account assets")
 		except Exception as e:
 			self._write_file_log("account_error", {"error": str(e)})
