@@ -32,6 +32,7 @@ bnc_conn = Binance_connect(
 	api_secret=sub1_api_secret,
 	log_to_file=config['general'].get('enable_trade_calc_logging', False),
 	log_file_path='logs/binance_connector.log',
+	api_mode=config['general'].get('futures_api_mode', 'classic'),
 )
 order_manager_enabled = bool(config['general'].get('use_order_manager', False))
 om = OrderManager(bnc_conn, config) if order_manager_enabled else None
