@@ -13,6 +13,7 @@
         "use_fast_data": true,
         "enable_trade_calc_logging": true,
         "use_order_manager": true,
+        "enable_om_minute_cleanup": false,
         "trading_pairs": [
             "BTCUSDT",
             "ETHUSDT",
