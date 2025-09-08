@@ -473,6 +473,30 @@ class Binance_connect:
 					candidate = top_wallet
 				if candidate and candidate > 0:
 					return candidate
+				# Try UM balance list endpoint
+				try:
+					um_bal = self._pm_request("GET", "/papi/v1/um/balance", {})
+					self._write_file_log("account_um_balance", {"response": um_bal})
+					if isinstance(um_bal, list):
+						for it in um_bal:
+							if isinstance(it, dict) and it.get("asset") == "USDT":
+								if balance_type == "available":
+									return self._safe_float(it.get("availableBalance"))
+								return self._safe_float(it.get("balance", it.get("walletBalance")))
+				except Exception:
+					pass
+				# Try generic balance list endpoint
+				try:
+					pm_bal = self._pm_request("GET", "/papi/v1/balance", {})
+					self._write_file_log("account_pm_balance", {"response": pm_bal})
+					if isinstance(pm_bal, list):
+						for it in pm_bal:
+							if isinstance(it, dict) and it.get("asset") == "USDT":
+								if balance_type == "available":
+									return self._safe_float(it.get("availableBalance"))
+								return self._safe_float(it.get("balance", it.get("walletBalance")))
+				except Exception:
+					pass
 				# Try generic PM account endpoint as an additional fallback
 				try:
 					pm_acc = self._pm_request("GET", "/papi/v1/account", {})
