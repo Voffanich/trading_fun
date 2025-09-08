@@ -39,41 +39,25 @@ om = OrderManager(bnc_conn, config) if order_manager_enabled else None
 
 # Put real bank to config for dynamic pairs filtering
 try:
-	bank_wallet = bnc_conn.get_usdt_balance(balance_type='wallet')
+	# Bank (equity) for PM
+	bank_equity = bnc_conn.get_usdt_balance(balance_type='collateral')
+	# Additional diagnostics (optional)
 	bank_available = 0.0
+	bank_wallet = 0.0
 	try:
 		bank_available = bnc_conn.get_usdt_balance(balance_type='available')
 	except Exception:
-		bank_available = 0.0
-	# Optional: use collateral if configured (for PM, sums cross-asset collateral)
-	if bool(config['general'].get('use_pm_total_collateral', False)):
-		try:
-			coll = bnc_conn.get_usdt_balance(balance_type='collateral')
-			if coll and coll > 0:
-				bank_wallet = max(bank_wallet, coll)
-				bank_available = max(bank_available, coll)
-		except Exception:
-			pass
-	print(f"PM balances: available={bank_available}, wallet={bank_wallet}")
-	if (bank_available or 0) <= 0 and (bank_wallet or 0) <= 0:
-		# Force a classic read as a last resort (without switching API mode globally)
-		try:
-			from binance.um_futures import UMFutures as _UM
-			classic = _UM(bnc_conn.api_key, bnc_conn.api_secret)
-			acc = classic.account(recvWindow=60000)
-			for a in (acc.get('assets', []) or []):
-				if a.get('asset') == 'USDT':
-					classic_available = float(a.get('availableBalance') or 0)
-					classic_wallet = float(a.get('walletBalance') or a.get('marginBalance') or 0)
-					bank_available = classic_available or bank_available
-					bank_wallet = classic_wallet or bank_wallet
-					break
-		except Exception as _ex:
-			print('Classic balance fallback failed:', _ex)
-	config['general']['dynamic_pairs_bank'] = (bank_available or bank_wallet or config['general'].get('initial_bank_for_test_stats', 0))
+		pass
+	try:
+		bank_wallet = bnc_conn.get_usdt_balance(balance_type='wallet')
+	except Exception:
+		pass
+	print(f"PM balances: equity={bank_equity}, available={bank_available}, wallet={bank_wallet}")
+	# Choose bank for dynamic pairs: prefer equity; fallback to wallet; then initial
+	config['general']['dynamic_pairs_bank'] = (bank_equity or bank_wallet or config['general'].get('initial_bank_for_test_stats', 0))
 	print(f"Dynamic pairs filter bank_usdt={config['general']['dynamic_pairs_bank']}")
 except Exception as ex:
-	print('Failed to fetch wallet/available balance for dynamic pairs filter:', ex)
+	print('Failed to fetch PM balances for dynamic pairs filter:', ex)
 	config['general']['dynamic_pairs_bank'] = config['general'].get('initial_bank_for_test_stats', 0)
 
 # init fast backend
