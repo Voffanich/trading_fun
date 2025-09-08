@@ -443,7 +443,9 @@ class Binance_connect:
 				data = self._pm_request("GET", "/papi/v1/um/account", {})
 				# PM fallback: if assets.USDT missing or None, try top-level balances
 				top_available = self._safe_float(data.get("availableBalance"))
-				top_wallet = self._safe_float(data.get("walletBalance"))
+				# Prefer totalWalletBalance if present; fallback to walletBalance
+				top_wallet = self._safe_float(data.get("totalWalletBalance", data.get("walletBalance")))
+				# Prefer totalMarginBalance/accountEquity if present
 				top_margin = self._safe_float(data.get("totalMarginBalance", data.get("accountEquity")))
 			else:
 				data = self.client.account(recvWindow=self.recv_window_ms)

@@ -39,10 +39,16 @@ om = OrderManager(bnc_conn, config) if order_manager_enabled else None
 
 # Put real bank to config for dynamic pairs filtering
 try:
-	config['general']['dynamic_pairs_bank'] = bnc_conn.get_usdt_balance(balance_type='wallet')
+	bank_wallet = bnc_conn.get_usdt_balance(balance_type='wallet')
+	bank_available = 0.0
+	try:
+		bank_available = bnc_conn.get_usdt_balance(balance_type='available')
+	except Exception:
+		bank_available = 0.0
+	config['general']['dynamic_pairs_bank'] = bank_available or bank_wallet or config['general'].get('initial_bank_for_test_stats', 0)
 	print(f"Dynamic pairs filter bank_usdt={config['general']['dynamic_pairs_bank']}")
 except Exception as ex:
-	print('Failed to fetch wallet balance for dynamic pairs filter:', ex)
+	print('Failed to fetch wallet/available balance for dynamic pairs filter:', ex)
 	config['general']['dynamic_pairs_bank'] = config['general'].get('initial_bank_for_test_stats', 0)
 
 # init fast backend
