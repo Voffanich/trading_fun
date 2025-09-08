@@ -473,6 +473,26 @@ class Binance_connect:
 					candidate = top_wallet
 				if candidate and candidate > 0:
 					return candidate
+				# Try generic PM account endpoint as an additional fallback
+				try:
+					pm_acc = self._pm_request("GET", "/papi/v1/account", {})
+					self._write_file_log("account_pm_generic", {"response": pm_acc})
+					assets2 = pm_acc.get("assets", []) or []
+					for asset in assets2:
+						if asset.get("asset") == "USDT":
+							if balance_type == "available":
+								return self._safe_float(asset.get("availableBalance"))
+							val = asset.get("walletBalance") or asset.get("marginBalance")
+							return self._safe_float(val)
+					# Also check generic top-level fields if present
+					cand2 = self._safe_float(pm_acc.get("availableBalance"))
+					if balance_type == "available" and cand2 > 0:
+						return cand2
+					cand3 = self._safe_float(pm_acc.get("totalWalletBalance", pm_acc.get("walletBalance")))
+					if cand3 > 0:
+						return cand3
+				except Exception:
+					pass
 				# Fallback to classic account if PM returned zeros/empty
 				try:
 					classic = self.client.account(recvWindow=self.recv_window_ms)
