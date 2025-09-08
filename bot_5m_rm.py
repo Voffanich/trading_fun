@@ -46,7 +46,22 @@ try:
 	except Exception:
 		bank_available = 0.0
 	print(f"PM balances: available={bank_available}, wallet={bank_wallet}")
-	config['general']['dynamic_pairs_bank'] = bank_available or bank_wallet or config['general'].get('initial_bank_for_test_stats', 0)
+	if (bank_available or 0) <= 0 and (bank_wallet or 0) <= 0:
+		# Force a classic read as a last resort (without switching API mode globally)
+		try:
+			from binance.um_futures import UMFutures as _UM
+			classic = _UM(bnc_conn.api_key, bnc_conn.api_secret)
+			acc = classic.account(recvWindow=60000)
+			for a in (acc.get('assets', []) or []):
+				if a.get('asset') == 'USDT':
+					classic_available = float(a.get('availableBalance') or 0)
+					classic_wallet = float(a.get('walletBalance') or a.get('marginBalance') or 0)
+					bank_available = classic_available or bank_available
+					bank_wallet = classic_wallet or bank_wallet
+					break
+		except Exception as _ex:
+			print('Classic balance fallback failed:', _ex)
+	config['general']['dynamic_pairs_bank'] = (bank_available or bank_wallet or config['general'].get('initial_bank_for_test_stats', 0))
 	print(f"Dynamic pairs filter bank_usdt={config['general']['dynamic_pairs_bank']}")
 except Exception as ex:
 	print('Failed to fetch wallet/available balance for dynamic pairs filter:', ex)

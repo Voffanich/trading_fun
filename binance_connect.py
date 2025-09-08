@@ -502,6 +502,17 @@ class Binance_connect:
 								return self._safe_float(asset.get("availableBalance"))
 							val = asset.get("walletBalance") or asset.get("marginBalance")
 							return self._safe_float(val)
+					# Extra fallback: use UMFutures.balance()
+					try:
+						bal = self.client.balance()
+						for row in bal or []:
+							if isinstance(row, dict) and row.get("asset") == "USDT":
+								if balance_type == "available":
+									# withdrawAvailable is the available balance on UM futures
+									return self._safe_float(row.get("withdrawAvailable", row.get("availableBalance")))
+								return self._safe_float(row.get("balance", row.get("walletBalance")))
+					except Exception:
+						pass
 				except Exception:
 					pass
 			raise RuntimeError("USDT asset not found in account assets")
