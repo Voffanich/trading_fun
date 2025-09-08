@@ -5,6 +5,10 @@ from typing import Optional, Dict, Any, Tuple
 
 from binance.um_futures import UMFutures
 from binance.error import ClientError
+import time
+import hmac
+import hashlib
+import requests
 import json
 from datetime import datetime
 import os
@@ -52,7 +56,7 @@ class Binance_connect:
 	- log_file_path: path to the log file (default "logs/binance_connector.log")
 	"""
 
-	def __init__(self, api_key: str, api_secret: str, testnet: bool = False, recv_window_ms: int = 60000, *, log_to_file: bool = False, log_file_path: Optional[str] = None) -> None:
+	def __init__(self, api_key: str, api_secret: str, testnet: bool = False, recv_window_ms: int = 60000, *, log_to_file: bool = False, log_file_path: Optional[str] = None, api_mode: str = "classic") -> None:
 		if testnet:
 			self.client = UMFutures(key=api_key, secret=api_secret, base_url="https://testnet.binancefuture.com")
 		else:
@@ -60,6 +64,12 @@ class Binance_connect:
 		self.recv_window_ms = recv_window_ms
 		self.log_to_file = log_to_file
 		self.log_file_path = log_file_path or os.path.join("logs", "binance_connector.log")
+		self.api_key = api_key
+		self.api_secret = api_secret
+		# classic: use binance SDK /fapi; pm: use direct HTTP to /papi with PM header
+		self.api_mode = (api_mode or "classic").lower()
+		self.pm_base_url = "https://papi.binance.com"
+		self._http = requests.Session()
 		if self.log_to_file:
 			os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
 
@@ -90,6 +100,36 @@ class Binance_connect:
 					print("  " + str(details))
 		# File
 		self._write_file_log(message, details)
+
+	# -------- PM HTTP helpers --------
+	def _pm_headers(self) -> Dict[str, str]:
+		return {
+			"X-MBX-APIKEY": self.api_key,
+			"X-MBX-PORTFOLIO-MARGIN": "true",
+		}
+
+	def _sign(self, params: Dict[str, Any]) -> str:
+		query = "&".join([f"{k}={params[k]}" for k in sorted(params.keys()) if params[k] is not None])
+		sig = hmac.new(self.api_secret.encode(), query.encode(), hashlib.sha256).hexdigest()
+		return sig
+
+	def _pm_request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
+		if params is None:
+			params = {}
+		params.setdefault("recvWindow", self.recv_window_ms)
+		params.setdefault("timestamp", int(time.time() * 1000))
+		params["signature"] = self._sign(params)
+		url = f"{self.pm_base_url}{path}"
+		r = self._http.request(method, url, headers=self._pm_headers(), params=params)
+		try:
+			r.raise_for_status()
+		except Exception as e:
+			self._log(True, "pm_request_failed", {"method": method, "path": path, "status": r.status_code, "body": r.text})
+			raise
+		try:
+			return r.json()
+		except Exception:
+			return {}
 
 	# -------- Symbol metadata and rounding --------
 	def _get_symbol_info(self, symbol: str) -> Dict[str, Any]:
@@ -155,13 +195,18 @@ class Binance_connect:
 
 	# -------- Public helpers for orders and positions --------
 	def get_open_orders(self, symbol: str) -> list:
-		"""Return open orders for a symbol. Be tolerant to SDK method/name differences."""
-		# Try primary name
+		"""Return open orders for a symbol. In PM mode, use /papi; otherwise SDK /fapi with tolerant fallback."""
+		if self.api_mode == "pm":
+			try:
+				resp = self._pm_request("GET", "/papi/v1/um/openOrders", {"symbol": symbol})
+				return resp if isinstance(resp, list) else []
+			except Exception:
+				return []
+		# classic
 		try:
 			return self.client.get_open_orders(symbol=symbol)
 		except Exception as e1:
 			self._log(True, "get_open_orders primary failed", {"symbol": symbol, "error": str(e1)})
-			# Try alternate method name if exists
 			try:
 				alt = getattr(self.client, "open_orders", None)
 				if callable(alt):
@@ -233,6 +278,15 @@ class Binance_connect:
 			return False
 
 	def get_mark_price(self, symbol: str) -> Optional[float]:
+		if self.api_mode == "pm":
+			try:
+				mp = self._pm_request("GET", "/papi/v1/um/premiumIndex", {"symbol": symbol})
+				# returns list or dict; unify
+				if isinstance(mp, list) and mp:
+					mp = mp[0]
+				return float(mp.get("markPrice")) if isinstance(mp, dict) and mp.get("markPrice") is not None else None
+			except Exception:
+				return None
 		try:
 			mp = self.client.mark_price(symbol=symbol)
 			return float(mp.get("markPrice")) if isinstance(mp, dict) and mp.get("markPrice") is not None else None
@@ -241,6 +295,15 @@ class Binance_connect:
 			return None
 
 	def get_position(self, symbol: str) -> Optional[dict]:
+		if self.api_mode == "pm":
+			try:
+				acc = self._pm_request("GET", "/papi/v1/um/account", {})
+				for p in acc.get("positions", []):
+					if p.get("symbol") == symbol:
+						return p
+				return None
+			except Exception:
+				return None
 		try:
 			positions = self.client.account(recvWindow=self.recv_window_ms)
 			for p in positions.get("positions", []):
@@ -254,7 +317,10 @@ class Binance_connect:
 	def get_nonzero_position_symbols(self) -> list:
 		"""Return list of symbols with non-zero absolute positionAmt."""
 		try:
-			acc = self.client.account(recvWindow=self.recv_window_ms)
+			if self.api_mode == "pm":
+				acc = self._pm_request("GET", "/papi/v1/um/account", {})
+			else:
+				acc = self.client.account(recvWindow=self.recv_window_ms)
 			symbols = []
 			for p in acc.get("positions", []):
 				try:
@@ -264,17 +330,20 @@ class Binance_connect:
 				except Exception:
 					continue
 			return symbols
-		except ClientError as e:
-			self._log(True, "get_nonzero_position_symbols failed", {"error": getattr(e, "error_message", str(e))})
+		except Exception as e:
+			self._log(True, "get_nonzero_position_symbols failed", {"error": str(e)})
 			return []
 
 	def get_all_positions(self) -> list:
 		"""Return raw positions array from account()."""
 		try:
-			acc = self.client.account(recvWindow=self.recv_window_ms)
+			if self.api_mode == "pm":
+				acc = self._pm_request("GET", "/papi/v1/um/account", {})
+			else:
+				acc = self.client.account(recvWindow=self.recv_window_ms)
 			return acc.get("positions", []) or []
-		except ClientError as e:
-			self._log(True, "get_all_positions failed", {"error": getattr(e, "error_message", str(e))})
+		except Exception as e:
+			self._log(True, "get_all_positions failed", {"error": str(e)})
 			return []
 
 	# -------- Risk helpers --------
