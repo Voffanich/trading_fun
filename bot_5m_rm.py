@@ -15,7 +15,7 @@ import bot_funcs as bf
 import levels as lv
 from cooldown import Cooldown
 from db_funcs import DB_handler
-from user_data.credentials import apikey3, sub1_api_key, sub1_api_secret
+from user_data.credentials import apikey3, sub1_api_key_3, sub1_api_secret_3
 from binance_connect import Binance_connect
 from order_manager import OrderManager
 from fast_data import enable_fast_backend, fast_get_ohlcv
@@ -28,8 +28,8 @@ config = bf.load_config('config_5m_rm.json')
 chat_id = 234637822
 
 bnc_conn = Binance_connect(
-	api_key=sub1_api_key,
-	api_secret=sub1_api_secret,
+	api_key=sub1_api_key_3,
+	api_secret=sub1_api_secret_3,
 	log_to_file=config['general'].get('enable_trade_calc_logging', False),
 	log_file_path='logs/binance_connector.log',
 )

@@ -62,7 +62,7 @@
         "profit_loss_ratio_min": 1,
         "profit_loss_ratio_max": 20.0,
         "take_distance_threshold": 20.0,
-        "stop_distance_threshold": 0.7,
+        "stop_distance_threshold": 0.5,
         "deal_risk_perc_of_bank": 3.0,
         "leverage_on": true,
         "leverage": 20,
@@ -85,8 +85,8 @@
 
         "indicators_validation": true,
         "indicators": {
-            "RSI_long": 50,
-            "RSI_short": 50,
+            "RSI_long": 60,
+            "RSI_short": 40,
             "BB_long": false,
             "BB_short": false,
             "MACD_long": false,
