@@ -8,6 +8,7 @@ from binance.error import ClientError
 import time
 import hmac
 import hashlib
+from urllib.parse import urlencode
 import requests
 import json
 from datetime import datetime
@@ -108,9 +109,8 @@ class Binance_connect:
 			"X-MBX-PORTFOLIO-MARGIN": "true",
 		}
 
-	def _sign(self, params: Dict[str, Any]) -> str:
-		query = "&".join([f"{k}={params[k]}" for k in sorted(params.keys()) if params[k] is not None])
-		sig = hmac.new(self.api_secret.encode(), query.encode(), hashlib.sha256).hexdigest()
+	def _sign(self, query_str: str) -> str:
+		sig = hmac.new(self.api_secret.encode(), query_str.encode(), hashlib.sha256).hexdigest()
 		return sig
 
 	def _pm_request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
@@ -118,9 +118,11 @@ class Binance_connect:
 			params = {}
 		params.setdefault("recvWindow", self.recv_window_ms)
 		params.setdefault("timestamp", int(time.time() * 1000))
-		params["signature"] = self._sign(params)
-		url = f"{self.pm_base_url}{path}"
-		r = self._http.request(method, url, headers=self._pm_headers(), params=params)
+		# Build URL-encoded query string deterministically
+		query_str = urlencode([(k, params[k]) for k in sorted(params.keys()) if params[k] is not None], doseq=True)
+		signature = self._sign(query_str)
+		full_url = f"{self.pm_base_url}{path}?{query_str}&signature={signature}"
+		r = self._http.request(method, full_url, headers=self._pm_headers())
 		try:
 			r.raise_for_status()
 		except Exception as e:
@@ -389,11 +391,14 @@ class Binance_connect:
 
 	def get_usdt_balance(self, balance_type: str = "wallet") -> float:
 		"""
-		Fetch USDT balance from USDT-M Futures account.
+		Fetch USDT balance. In PM mode use /papi account; otherwise classic UMFutures account().
 		balance_type: "wallet" (default) or "available"
 		"""
 		try:
-			data = self.client.account(recvWindow=self.recv_window_ms)
+			if self.api_mode == "pm":
+				data = self._pm_request("GET", "/papi/v1/um/account", {})
+			else:
+				data = self.client.account(recvWindow=self.recv_window_ms)
 			self._write_file_log("account", {"response": data})
 			for asset in data.get("assets", []):
 				if asset.get("asset") == "USDT":
@@ -401,8 +406,8 @@ class Binance_connect:
 						return float(asset.get("availableBalance"))
 					return float(asset.get("walletBalance"))
 			raise RuntimeError("USDT asset not found in account assets")
-		except ClientError as e:
-			self._write_file_log("account_error", {"error": getattr(e, "error_message", str(e))})
+		except Exception as e:
+			self._write_file_log("account_error", {"error": str(e)})
 			raise RuntimeError(f"Failed to fetch account balance: {e}")
 
 	def compute_quantity_from_risk(
