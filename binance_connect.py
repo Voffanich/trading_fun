@@ -405,10 +405,15 @@ class Binance_connect:
 		try:
 			if self.api_mode == "pm":
 				data = self._pm_request("GET", "/papi/v1/um/account", {})
+				# PM fallback: if assets.USDT missing or None, try top-level balances
+				top_available = self._safe_float(data.get("availableBalance"))
+				top_wallet = self._safe_float(data.get("walletBalance"))
+				top_margin = self._safe_float(data.get("totalMarginBalance", data.get("accountEquity")))
 			else:
 				data = self.client.account(recvWindow=self.recv_window_ms)
 			self._write_file_log("account", {"response": data})
-			for asset in data.get("assets", []):
+			assets = data.get("assets", []) or []
+			for asset in assets:
 				if asset.get("asset") == "USDT":
 					# Prefer availableBalance if requested/exists, otherwise fallback to walletBalance or marginBalance
 					if balance_type == "available":
@@ -419,6 +424,14 @@ class Binance_connect:
 					if val is None:
 						val = asset.get("marginBalance")
 					return self._safe_float(val)
+			# If we are in PM and assets didn't return USDT, use top-level fallbacks
+			if self.api_mode == "pm":
+				if balance_type == "available" and top_available > 0:
+					return top_available
+				# prefer margin/equity if present; else wallet
+				if top_margin > 0:
+					return top_margin
+				return top_wallet
 			raise RuntimeError("USDT asset not found in account assets")
 		except Exception as e:
 			self._write_file_log("account_error", {"error": str(e)})
