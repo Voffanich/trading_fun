@@ -45,6 +45,15 @@ try:
 		bank_available = bnc_conn.get_usdt_balance(balance_type='available')
 	except Exception:
 		bank_available = 0.0
+	# Optional: use collateral if configured (for PM, sums cross-asset collateral)
+	if bool(config['general'].get('use_pm_total_collateral', False)):
+		try:
+			coll = bnc_conn.get_usdt_balance(balance_type='collateral')
+			if coll and coll > 0:
+				bank_wallet = max(bank_wallet, coll)
+				bank_available = max(bank_available, coll)
+		except Exception:
+			pass
 	print(f"PM balances: available={bank_available}, wallet={bank_wallet}")
 	if (bank_available or 0) <= 0 and (bank_wallet or 0) <= 0:
 		# Force a classic read as a last resort (without switching API mode globally)

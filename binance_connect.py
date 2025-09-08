@@ -436,7 +436,7 @@ class Binance_connect:
 	def get_usdt_balance(self, balance_type: str = "wallet") -> float:
 		"""
 		Fetch USDT balance. In PM mode use /papi account; otherwise classic UMFutures account().
-		balance_type: "wallet" (default) or "available"
+		balance_type: "wallet" | "available" | "collateral"
 		"""
 		try:
 			if self.api_mode == "pm":
@@ -453,26 +453,24 @@ class Binance_connect:
 			assets = data.get("assets", []) or []
 			for asset in assets:
 				if asset.get("asset") == "USDT":
-					# Prefer availableBalance if requested/exists, otherwise fallback to walletBalance or marginBalance
 					if balance_type == "available":
 						val = asset.get("availableBalance")
 						return self._safe_float(val)
+					if balance_type == "collateral":
+						# No per-asset collateral in UM account; handled below via /papi/v1/account
+						pass
 					# wallet: try walletBalance, fallback to marginBalance
 					val = asset.get("walletBalance")
 					if val is None:
 						val = asset.get("marginBalance")
 					return self._safe_float(val)
-			# If we are in PM and assets didn't return USDT, use top-level fallbacks
+			# PM mode advanced fallbacks
 			if self.api_mode == "pm":
-				candidate = None
+				# Top-level candidates
 				if balance_type == "available" and top_available > 0:
-					candidate = top_available
-				elif top_margin > 0:
-					candidate = top_margin
-				elif top_wallet > 0:
-					candidate = top_wallet
-				if candidate and candidate > 0:
-					return candidate
+					return top_available
+				if balance_type == "wallet" and top_wallet > 0:
+					return top_wallet
 				# Try UM balance list endpoint
 				try:
 					um_bal = self._pm_request("GET", "/papi/v1/um/balance", {})
@@ -485,39 +483,25 @@ class Binance_connect:
 								return self._safe_float(it.get("balance", it.get("walletBalance")))
 				except Exception:
 					pass
-				# Try generic balance list endpoint
-				try:
-					pm_bal = self._pm_request("GET", "/papi/v1/balance", {})
-					self._write_file_log("account_pm_balance", {"response": pm_bal})
-					if isinstance(pm_bal, list):
-						for it in pm_bal:
-							if isinstance(it, dict) and it.get("asset") == "USDT":
-								if balance_type == "available":
-									return self._safe_float(it.get("availableBalance"))
-								return self._safe_float(it.get("balance", it.get("walletBalance")))
-				except Exception:
-					pass
-				# Try generic PM account endpoint as an additional fallback
+				# Try generic PM account endpoint for collateral and totals
 				try:
 					pm_acc = self._pm_request("GET", "/papi/v1/account", {})
 					self._write_file_log("account_pm_generic", {"response": pm_acc})
-					assets2 = pm_acc.get("assets", []) or []
-					for asset in assets2:
-						if asset.get("asset") == "USDT":
-							if balance_type == "available":
-								return self._safe_float(asset.get("availableBalance"))
-							val = asset.get("walletBalance") or asset.get("marginBalance")
-							return self._safe_float(val)
-					# Also check generic top-level fields if present
-					cand2 = self._safe_float(pm_acc.get("availableBalance"))
-					if balance_type == "available" and cand2 > 0:
-						return cand2
-					cand3 = self._safe_float(pm_acc.get("totalWalletBalance", pm_acc.get("walletBalance")))
-					if cand3 > 0:
-						return cand3
+					if balance_type == "collateral":
+						coll = self._safe_float(pm_acc.get("totalCollateral"))
+						if coll > 0:
+							return coll
+					if balance_type == "available":
+						cand_av = self._safe_float(pm_acc.get("availableBalance"))
+						if cand_av > 0:
+							return cand_av
+					# As a last resort for wallet, check combined wallet totals
+					cand_wallet = self._safe_float(pm_acc.get("totalWalletBalance", pm_acc.get("walletBalance")))
+					if balance_type == "wallet" and cand_wallet > 0:
+						return cand_wallet
 				except Exception:
 					pass
-				# Fallback to classic account if PM returned zeros/empty
+				# Fallback to classic account and UMFutures.balance() (may fail with -2015 if no perms)
 				try:
 					classic = self.client.account(recvWindow=self.recv_window_ms)
 					for asset in (classic.get("assets", []) or []):
@@ -532,7 +516,6 @@ class Binance_connect:
 						for row in bal or []:
 							if isinstance(row, dict) and row.get("asset") == "USDT":
 								if balance_type == "available":
-									# withdrawAvailable is the available balance on UM futures
 									return self._safe_float(row.get("withdrawAvailable", row.get("availableBalance")))
 								return self._safe_float(row.get("balance", row.get("walletBalance")))
 					except Exception:
