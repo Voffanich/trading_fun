@@ -36,6 +36,18 @@ bnc_conn = Binance_connect(
 order_manager_enabled = bool(config['general'].get('use_order_manager', False))
 om = OrderManager(bnc_conn, config) if order_manager_enabled else None
 
+# Optional one-time account setup at startup, guarded by config
+try:
+	if config['general'].get('setup_account_on_start', False):
+		for sym in config['general'].get('trading_pairs', []):
+			try:
+				bnc_conn.set_margin_type(sym, config['deal_config'].get('margin_type', 'ISOLATED'))
+				bnc_conn.set_leverage(sym, int(config['deal_config'].get('leverage', 20)))
+			except Exception as ex:
+				print(f'Account setup failed for {sym}: {ex}')
+except Exception:
+	pass
+
 # Put real bank to config for dynamic pairs filtering
 try:
 	config['general']['dynamic_pairs_bank'] = bnc_conn.get_usdt_balance(balance_type='wallet')

@@ -98,7 +98,7 @@ class OrderManager:
 					position_side=position_side,
 					working_type=working_type,
 					time_in_force=time_in_force,
-					skip_account_setup=False,
+					skip_account_setup=True,
 					verbose=verbose,
 				)
 				if res.success:
