@@ -1,5 +1,6 @@
 {
     "general":{
+        "futures_api_mode": "pm",
         "db_file_name": "deals_5m_rm.sqlite",
         "trading_timeframe": "5m",
         "timeframes_used": ["1m", "5m", "1h", "4h", "1d"],
