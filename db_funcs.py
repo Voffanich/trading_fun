@@ -53,6 +53,31 @@ class DB_handler():
         except sqlite3.Error as error:
             print('SQLite error: ', error)
             return error
+
+        # Table to track exchange orders lifecycle (active/open orders mapping)
+        query_orders = """
+        CREATE TABLE IF NOT EXISTS exchange_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            deal_id INTEGER,
+            symbol TEXT NOT NULL,
+            type TEXT NOT NULL,
+            side TEXT,
+            client_order_id TEXT,
+            order_id TEXT,
+            price REAL,
+            stop_price REAL,
+            qty REAL,
+            status TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        );
+        """
+        try:
+            self.cursor.execute(query_orders)
+            self.connection.commit()
+        except sqlite3.Error as error:
+            print('SQLite error: ', error)
+            return error
         
     def add_deal(self, deal):
         query = """

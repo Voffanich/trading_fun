@@ -5,9 +5,15 @@ from typing import Optional, Dict, Any, Tuple
 
 from binance.um_futures import UMFutures
 from binance.error import ClientError
+import time
+import hmac
+import hashlib
+from urllib.parse import urlencode
+import requests
 import json
 from datetime import datetime
 import os
+from decimal import Decimal, ROUND_DOWN, getcontext
 
 
 @dataclass
@@ -51,7 +57,7 @@ class Binance_connect:
 	- log_file_path: path to the log file (default "logs/binance_connector.log")
 	"""
 
-	def __init__(self, api_key: str, api_secret: str, testnet: bool = False, recv_window_ms: int = 60000, *, log_to_file: bool = False, log_file_path: Optional[str] = None) -> None:
+	def __init__(self, api_key: str, api_secret: str, testnet: bool = False, recv_window_ms: int = 60000, *, log_to_file: bool = False, log_file_path: Optional[str] = None, api_mode: str = "classic") -> None:
 		if testnet:
 			self.client = UMFutures(key=api_key, secret=api_secret, base_url="https://testnet.binancefuture.com")
 		else:
@@ -59,6 +65,12 @@ class Binance_connect:
 		self.recv_window_ms = recv_window_ms
 		self.log_to_file = log_to_file
 		self.log_file_path = log_file_path or os.path.join("logs", "binance_connector.log")
+		self.api_key = api_key
+		self.api_secret = api_secret
+		# classic: use binance SDK /fapi; pm: use direct HTTP to /papi with PM header
+		self.api_mode = (api_mode or "classic").lower()
+		self.pm_base_url = "https://papi.binance.com"
+		self._http = requests.Session()
 		if self.log_to_file:
 			os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
 
@@ -90,6 +102,45 @@ class Binance_connect:
 		# File
 		self._write_file_log(message, details)
 
+	# -------- PM HTTP helpers --------
+	def _pm_headers(self) -> Dict[str, str]:
+		return {
+			"X-MBX-APIKEY": self.api_key,
+			"X-MBX-PORTFOLIO-MARGIN": "true",
+		}
+
+	def _safe_float(self, value: Any, default: float = 0.0) -> float:
+		try:
+			if value is None:
+				return default
+			return float(value)
+		except Exception:
+			return default
+
+	def _sign(self, query_str: str) -> str:
+		sig = hmac.new(self.api_secret.encode(), query_str.encode(), hashlib.sha256).hexdigest()
+		return sig
+
+	def _pm_request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
+		if params is None:
+			params = {}
+		params.setdefault("recvWindow", self.recv_window_ms)
+		params.setdefault("timestamp", int(time.time() * 1000))
+		# Build URL-encoded query string deterministically
+		query_str = urlencode([(k, params[k]) for k in sorted(params.keys()) if params[k] is not None], doseq=True)
+		signature = self._sign(query_str)
+		full_url = f"{self.pm_base_url}{path}?{query_str}&signature={signature}"
+		r = self._http.request(method, full_url, headers=self._pm_headers())
+		try:
+			r.raise_for_status()
+		except Exception as e:
+			self._log(True, "pm_request_failed", {"method": method, "path": path, "status": r.status_code, "body": r.text})
+			raise
+		try:
+			return r.json()
+		except Exception:
+			return {}
+
 	# -------- Symbol metadata and rounding --------
 	def _get_symbol_info(self, symbol: str) -> Dict[str, Any]:
 		info = self.client.exchange_info()
@@ -103,6 +154,23 @@ class Binance_connect:
 		for f in symbol_info.get("filters", []):
 			filters[f.get("filterType")] = f
 		return filters
+
+	# -------- Decimal helpers strictly matching Binance filters --------
+	def _quantum_from_step(self, step_str: str) -> Decimal:
+		"""Return Decimal quantum for quantize based on a Binance step string (e.g. '0.0001' or '1e-8')."""
+		if not step_str:
+			step_str = "1"
+		return Decimal(step_str)
+
+	def _format_by_step(self, value: float, step_str: str) -> str:
+		"""Quantize value DOWN to the given step and return as plain string without excess trailing zeros."""
+		getcontext().prec = 28
+		quant = self._quantum_from_step(step_str)
+		q = (Decimal(str(value))).quantize(quant, rounding=ROUND_DOWN)
+		s = format(q, 'f')
+		if '.' in s:
+			s = s.rstrip('0').rstrip('.') or '0'
+		return s
 
 	def _tick_size(self, filters: Dict[str, Dict[str, Any]]) -> float:
 		pf = filters.get("PRICE_FILTER", {})
@@ -134,6 +202,195 @@ class Binance_connect:
 		if rounded < min_qty:
 			return 0.0
 		return rounded
+
+	# -------- Public helpers for orders and positions --------
+	def get_open_orders(self, symbol: str) -> list:
+		"""Return open orders for a symbol. In PM mode, use /papi; otherwise SDK /fapi with tolerant fallback."""
+		if self.api_mode == "pm":
+			try:
+				resp = self._pm_request("GET", "/papi/v1/um/openOrders", {"symbol": symbol})
+				return resp if isinstance(resp, list) else []
+			except Exception:
+				return []
+		# classic
+		try:
+			return self.client.get_open_orders(symbol=symbol)
+		except Exception as e1:
+			self._log(True, "get_open_orders primary failed", {"symbol": symbol, "error": str(e1)})
+			try:
+				alt = getattr(self.client, "open_orders", None)
+				if callable(alt):
+					return alt(symbol=symbol)
+			except Exception as e2:
+				self._log(True, "get_open_orders alternate failed", {"symbol": symbol, "error": str(e2)})
+			return []
+
+	def get_all_open_orders(self) -> list:
+		"""Return all open orders across symbols (UMFutures supports no-symbol call)."""
+		if self.api_mode == "pm":
+			try:
+				resp = self._pm_request("GET", "/papi/v1/um/openOrders", {})
+				return resp if isinstance(resp, list) else []
+			except Exception as e:
+				self._log(True, "get_all_open_orders failed (PM)", {"error": str(e)})
+				return []
+		try:
+			return self.client.get_open_orders()
+		except TypeError as e:
+			# Some client versions require a symbol. We'll log and return empty to allow caller fallback.
+			self._log(True, "get_all_open_orders unsupported without symbol", {"error": str(e)})
+			return []
+		except ClientError as e:
+			self._log(True, "get_all_open_orders failed", {"error": getattr(e, "error_message", str(e))})
+			return []
+
+	def get_order(self, symbol: str, *, order_id: Optional[int] = None, client_order_id: Optional[str] = None) -> Optional[dict]:
+		try:
+			if self.api_mode == "pm":
+				params: Dict[str, Any] = {"symbol": symbol}
+				if order_id is not None:
+					params["orderId"] = order_id
+				elif client_order_id is not None:
+					params["origClientOrderId"] = client_order_id
+				else:
+					return None
+				resp = self._pm_request("GET", "/papi/v1/um/order", params)
+				return resp if isinstance(resp, dict) else None
+			if order_id is not None:
+				return self.client.get_order(symbol=symbol, orderId=order_id)
+			elif client_order_id is not None:
+				return self.client.get_order(symbol=symbol, origClientOrderId=client_order_id)
+			return None
+		except ClientError as e:
+			self._log(True, "get_order failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return None
+
+	def cancel_order(self, symbol: str, *, order_id: Optional[Any] = None, client_order_id: Optional[str] = None) -> bool:
+		"""Cancel by numeric orderId or string clientOrderId; safely ignore empty/invalid IDs."""
+		def _is_valid_order_id(oid: Optional[Any]) -> bool:
+			if oid is None:
+				return False
+			# allow numeric > 0 or non-empty digit string
+			if isinstance(oid, int):
+				return oid > 0
+			if isinstance(oid, str):
+				return oid.strip().isdigit()
+			return False
+		try:
+			if self.api_mode == "pm":
+				params: Dict[str, Any] = {"symbol": symbol}
+				if _is_valid_order_id(order_id):
+					params["orderId"] = int(order_id)
+				elif client_order_id is not None and isinstance(client_order_id, str) and client_order_id.strip():
+					params["origClientOrderId"] = client_order_id
+				else:
+					self._log(True, "cancel_order skipped", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "reason": "empty or invalid ID"})
+					return False
+				self._log(True, "cancel_order attempt (PM)", {"symbol": symbol, "params": {k: v for k, v in params.items() if k != "symbol"}})
+				self._pm_request("DELETE", "/papi/v1/um/order", params)
+				return True
+			if _is_valid_order_id(order_id):
+				self._log(True, "cancel_order attempt", {"symbol": symbol, "order_id": order_id})
+				self.client.cancel_order(symbol=symbol, orderId=int(order_id))
+				return True
+			elif client_order_id is not None and isinstance(client_order_id, str) and client_order_id.strip():
+				self._log(True, "cancel_order attempt by clientOrderId", {"symbol": symbol, "client_order_id": client_order_id})
+				self.client.cancel_order(symbol=symbol, origClientOrderId=client_order_id)
+				return True
+			else:
+				self._log(True, "cancel_order skipped", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "reason": "empty or invalid ID"})
+				return False
+		except ClientError as e:
+			self._log(True, "cancel_order failed", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "error": getattr(e, "error_message", str(e))})
+			return False
+		except Exception as e:
+			# Catch TypeError like: orderId is mandatory, but received empty
+			self._log(True, "cancel_order failed (unexpected)", {"symbol": symbol, "order_id": order_id, "client_order_id": client_order_id, "error": str(e)})
+			return False
+
+	def cancel_all_open_orders(self, symbol: str) -> bool:
+		if self.api_mode == "pm":
+			try:
+				self._pm_request("DELETE", "/papi/v1/um/allOpenOrders", {"symbol": symbol})
+				return True
+			except Exception as e:
+				self._log(True, "cancel_all_open_orders failed (PM)", {"symbol": symbol, "error": str(e)})
+				return False
+		try:
+			self.client.cancel_open_orders(symbol=symbol)
+			return True
+		except ClientError as e:
+			self._log(True, "cancel_all_open_orders failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return False
+
+	def get_mark_price(self, symbol: str) -> Optional[float]:
+		if self.api_mode == "pm":
+			try:
+				mp = self._pm_request("GET", "/papi/v1/um/premiumIndex", {"symbol": symbol})
+				# returns list or dict; unify
+				if isinstance(mp, list) and mp:
+					mp = mp[0]
+				return float(mp.get("markPrice")) if isinstance(mp, dict) and mp.get("markPrice") is not None else None
+			except Exception:
+				return None
+		try:
+			mp = self.client.mark_price(symbol=symbol)
+			return float(mp.get("markPrice")) if isinstance(mp, dict) and mp.get("markPrice") is not None else None
+		except ClientError as e:
+			self._log(True, "get_mark_price failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return None
+
+	def get_position(self, symbol: str) -> Optional[dict]:
+		if self.api_mode == "pm":
+			try:
+				acc = self._pm_request("GET", "/papi/v1/um/account", {})
+				for p in acc.get("positions", []):
+					if p.get("symbol") == symbol:
+						return p
+				return None
+			except Exception:
+				return None
+		try:
+			positions = self.client.account(recvWindow=self.recv_window_ms)
+			for p in positions.get("positions", []):
+				if p.get("symbol") == symbol:
+					return p
+			return None
+		except ClientError as e:
+			self._log(True, "get_position failed", {"symbol": symbol, "error": getattr(e, "error_message", str(e))})
+			return None
+
+	def get_nonzero_position_symbols(self) -> list:
+		"""Return list of symbols with non-zero absolute positionAmt."""
+		try:
+			if self.api_mode == "pm":
+				acc = self._pm_request("GET", "/papi/v1/um/account", {})
+			else:
+				acc = self.client.account(recvWindow=self.recv_window_ms)
+			symbols = []
+			for p in acc.get("positions", []):
+				try:
+					amt = float(p.get("positionAmt", 0) or 0)
+					if abs(amt) > 0:
+						symbols.append(p.get("symbol"))
+				except Exception:
+					continue
+			return symbols
+		except Exception as e:
+			self._log(True, "get_nonzero_position_symbols failed", {"error": str(e)})
+			return []
+
+	def get_all_positions(self) -> list:
+		"""Return raw positions array from account()."""
+		try:
+			if self.api_mode == "pm":
+				acc = self._pm_request("GET", "/papi/v1/um/account", {})
+			else:
+				acc = self.client.account(recvWindow=self.recv_window_ms)
+			return acc.get("positions", []) or []
+		except Exception as e:
+			self._log(True, "get_all_positions failed", {"error": str(e)})
+			return []
 
 	# -------- Risk helpers --------
 	def derive_quantity(self, *, notional_usdt: Optional[float], entry_price: float, step_size: float, min_qty: float) -> float:
@@ -178,20 +435,42 @@ class Binance_connect:
 
 	def get_usdt_balance(self, balance_type: str = "wallet") -> float:
 		"""
-		Fetch USDT balance from USDT-M Futures account.
+		Fetch USDT balance. In PM mode use /papi account; otherwise classic UMFutures account().
 		balance_type: "wallet" (default) or "available"
 		"""
 		try:
-			data = self.client.account(recvWindow=self.recv_window_ms)
+			if self.api_mode == "pm":
+				data = self._pm_request("GET", "/papi/v1/um/account", {})
+				# PM fallback: if assets.USDT missing or None, try top-level balances
+				top_available = self._safe_float(data.get("availableBalance"))
+				top_wallet = self._safe_float(data.get("walletBalance"))
+				top_margin = self._safe_float(data.get("totalMarginBalance", data.get("accountEquity")))
+			else:
+				data = self.client.account(recvWindow=self.recv_window_ms)
 			self._write_file_log("account", {"response": data})
-			for asset in data.get("assets", []):
+			assets = data.get("assets", []) or []
+			for asset in assets:
 				if asset.get("asset") == "USDT":
+					# Prefer availableBalance if requested/exists, otherwise fallback to walletBalance or marginBalance
 					if balance_type == "available":
-						return float(asset.get("availableBalance"))
-					return float(asset.get("walletBalance"))
+						val = asset.get("availableBalance")
+						return self._safe_float(val)
+					# wallet: try walletBalance, fallback to marginBalance
+					val = asset.get("walletBalance")
+					if val is None:
+						val = asset.get("marginBalance")
+					return self._safe_float(val)
+			# If we are in PM and assets didn't return USDT, use top-level fallbacks
+			if self.api_mode == "pm":
+				if balance_type == "available" and top_available > 0:
+					return top_available
+				# prefer margin/equity if present; else wallet
+				if top_margin > 0:
+					return top_margin
+				return top_wallet
 			raise RuntimeError("USDT asset not found in account assets")
-		except ClientError as e:
-			self._write_file_log("account_error", {"error": getattr(e, "error_message", str(e))})
+		except Exception as e:
+			self._write_file_log("account_error", {"error": str(e)})
 			raise RuntimeError(f"Failed to fetch account balance: {e}")
 
 	def compute_quantity_from_risk(
@@ -236,6 +515,14 @@ class Binance_connect:
 
 	# -------- Account setup --------
 	def set_leverage(self, symbol: str, leverage: int) -> None:
+		# PM mode via PAPI
+		if self.api_mode == "pm":
+			try:
+				resp = self._pm_request("POST", "/papi/v1/um/leverage", {"symbol": symbol, "leverage": leverage})
+				self._write_file_log("change_leverage", {"symbol": symbol, "leverage": leverage, "response": resp})
+			except Exception as e:
+				raise RuntimeError(f"Failed to set leverage (PM): {e}")
+			return
 		try:
 			resp = self.client.change_leverage(symbol=symbol, leverage=leverage, recvWindow=self.recv_window_ms)
 			self._write_file_log("change_leverage", {"symbol": symbol, "leverage": leverage, "response": resp})
@@ -247,6 +534,14 @@ class Binance_connect:
 			raise RuntimeError(f"Failed to set leverage: {e}")
 
 	def set_margin_type(self, symbol: str, margin_type: str = "ISOLATED") -> None:
+		# PM mode via PAPI
+		if self.api_mode == "pm":
+			try:
+				resp = self._pm_request("POST", "/papi/v1/um/marginType", {"symbol": symbol, "marginType": margin_type})
+				self._write_file_log("change_margin_type", {"symbol": symbol, "margin_type": margin_type, "response": resp})
+			except Exception as e:
+				raise RuntimeError(f"Failed to set margin type (PM): {e}")
+			return
 		try:
 			resp = self.client.change_margin_type(symbol=symbol, marginType=margin_type, recvWindow=self.recv_window_ms)
 			self._write_file_log("change_margin_type", {"symbol": symbol, "margin_type": margin_type, "response": resp})
@@ -308,7 +603,7 @@ class Binance_connect:
 		position_side: str = "BOTH",
 		skip_account_setup: bool = False,
 		verbose: bool = False,
-		trailing_size_mode: str = "close_position",  # "close_position" | "quantity"
+		trailing_size_mode: str = "quantity",  # "quantity" (reduceOnly qty) | "close_position"
 		risk_balance_type: str = "available",
 	) -> OrderResult:
 		"""
@@ -342,6 +637,8 @@ class Binance_connect:
 			# 1) Symbol metadata and rounding
 			symbol_info = self._get_symbol_info(symbol)
 			filters = self._get_filters(symbol_info)
+			pf = filters.get("PRICE_FILTER", {})
+			ls = filters.get("LOT_SIZE", {})
 			tick_size = self._tick_size(filters)
 			step_size = self._step_size(filters)
 			min_qty = self._min_qty(filters)
@@ -402,70 +699,118 @@ class Binance_connect:
 
 			limit_price = self._round_price(limit_price_raw, tick_size)
 			qty_rounded = self._round_qty(quantity, step_size, min_qty)
+			# Prepare strings according to Binance steps
+			tick_size_str = str(pf.get("tickSize", "0.0001"))
+			step_size_str = str(ls.get("stepSize", "1"))
+			limit_price_str = self._format_by_step(limit_price, tick_size_str)
+			qty_str = self._format_by_step(qty_rounded, step_size_str)
 			self._log(verbose, "Computed entry and quantity", {
 				"limit_price_raw": limit_price_raw,
-				"limit_price": limit_price,
+				"limit_price": limit_price_str,
 				"quantity_raw": quantity,
-				"quantity": qty_rounded,
+				"quantity": qty_str,
 			})
 
 			# 5) Validate lot size and notional
-			self._validate_qty_notional(price=limit_price or entry_price, qty=qty_rounded, min_qty=min_qty, min_notional=min_notional)
-			self._log(verbose, "Validation passed", {"notional": (limit_price or entry_price) * qty_rounded})
+			self._validate_qty_notional(price=float(limit_price_str) if limit_price_str else entry_price, qty=float(qty_str), min_qty=min_qty, min_notional=min_notional)
+			self._log(verbose, "Validation passed", {"notional": (float(limit_price_str) if limit_price_str else entry_price) * float(qty_str)})
 
 			# 6) Place entry LIMIT order
-			entry_order = self.client.new_order(
-				symbol=symbol,
-				side=side.upper(),
-				type="LIMIT",
-				timeInForce=time_in_force,
-				quantity=f"{qty_rounded}",
-				price=f"{limit_price}",
-				positionSide=position_side,
-				recvWindow=self.recv_window_ms,
-			)
+			if self.api_mode == "pm":
+				payload_entry = {
+					"symbol": symbol,
+					"side": side.upper(),
+					"type": "LIMIT",
+					"timeInForce": time_in_force,
+					"quantity": qty_str,
+					"price": limit_price_str,
+					"positionSide": position_side,
+				}
+				entry_order = self._pm_request("POST", "/papi/v1/um/order", payload_entry)
+			else:
+				entry_order = self.client.new_order(
+					symbol=symbol,
+					side=side.upper(),
+					type="LIMIT",
+					timeInForce=time_in_force,
+					quantity=qty_str,
+					price=limit_price_str,
+					positionSide=position_side,
+					recvWindow=self.recv_window_ms,
+				)
 			orders_raw["entry"] = entry_order
-			self._log(verbose, "Entry order placed", {"orderId": entry_order.get("orderId"), "price": limit_price, "qty": qty_rounded, "response": entry_order})
+			self._log(verbose, "Entry order placed", {"orderId": entry_order.get("orderId"), "price": limit_price_str, "qty": qty_str, "response": entry_order})
 
 			# 7) Place Stop-Loss (STOP_MARKET reduceOnly)
 			stop_price = self._round_price(stop_loss_price, tick_size)
-			stop_order = self.client.new_order(
-				symbol=symbol,
-				side=("SELL" if side.upper() == "BUY" else "BUY"),
-				type="STOP_MARKET",
-				stopPrice=f"{stop_price}",
-				closePosition=False,
-				reduceOnly=reduce_only,
-				workingType=working_type,
-				quantity=f"{qty_rounded}",
-				positionSide=position_side,
-				recvWindow=self.recv_window_ms,
-			)
+			stop_price_str = self._format_by_step(stop_price, tick_size_str)
+			if self.api_mode == "pm":
+				stop_order = self._pm_request("POST", "/papi/v1/um/order", {
+					"symbol": symbol,
+					"side": ("SELL" if side.upper() == "BUY" else "BUY"),
+					"type": "STOP_MARKET",
+					"stopPrice": stop_price_str,
+					"closePosition": False,
+					"reduceOnly": reduce_only,
+					"workingType": working_type,
+					"quantity": qty_str,
+					"positionSide": position_side,
+				})
+			else:
+				stop_order = self.client.new_order(
+					symbol=symbol,
+					side=("SELL" if side.upper() == "BUY" else "BUY"),
+					type="STOP_MARKET",
+					stopPrice=stop_price_str,
+					closePosition=False,
+					reduceOnly=reduce_only,
+					workingType=working_type,
+					quantity=qty_str,
+					positionSide=position_side,
+					recvWindow=self.recv_window_ms,
+				)
 			orders_raw["stop"] = stop_order
-			self._log(verbose, "Stop-loss order placed", {"orderId": stop_order.get("orderId"), "stopPrice": stop_price, "response": stop_order})
+			self._log(verbose, "Stop-loss order placed", {"orderId": stop_order.get("orderId"), "stopPrice": stop_price_str, "response": stop_order})
 
 			# 8) Optional Take-Profit (TAKE_PROFIT_MARKET reduceOnly)
 			take_profit_order = None
 			if take_profit_price is not None:
 				tp_price = self._round_price(float(take_profit_price), tick_size)
-				take_profit_order = self.client.new_order(
-					symbol=symbol,
-					side=("SELL" if side.upper() == "BUY" else "BUY"),
-					type="TAKE_PROFIT_MARKET",
-					stopPrice=f"{tp_price}",
-					closePosition=False,
-					reduceOnly=reduce_only,
-					workingType=working_type,
-					quantity=f"{qty_rounded}",
-					positionSide=position_side,
-					recvWindow=self.recv_window_ms,
-				)
+				tp_price_str = self._format_by_step(tp_price, tick_size_str)
+				if self.api_mode == "pm":
+					take_profit_order = self._pm_request("POST", "/papi/v1/um/order", {
+						"symbol": symbol,
+						"side": ("SELL" if side.upper() == "BUY" else "BUY"),
+						"type": "TAKE_PROFIT_MARKET",
+						"stopPrice": tp_price_str,
+						"closePosition": False,
+						"reduceOnly": reduce_only,
+						"workingType": working_type,
+						"quantity": qty_str,
+						"positionSide": position_side,
+					})
+				else:
+					take_profit_order = self.client.new_order(
+						symbol=symbol,
+						side=("SELL" if side.upper() == "BUY" else "BUY"),
+						type="TAKE_PROFIT_MARKET",
+						stopPrice=tp_price_str,
+						closePosition=False,
+						reduceOnly=reduce_only,
+						workingType=working_type,
+						quantity=qty_str,
+						positionSide=position_side,
+						recvWindow=self.recv_window_ms,
+					)
 				orders_raw["take_profit"] = take_profit_order
-				self._log(verbose, "Take-profit order placed", {"orderId": take_profit_order.get("orderId"), "tpPrice": tp_price, "response": take_profit_order})
+				self._log(verbose, "Take-profit order placed", {"orderId": (take_profit_order.get("orderId") if isinstance(take_profit_order, dict) else None), "tpPrice": tp_price_str, "response": take_profit_order})
 
 			# 9) Trailing Stop (TRAILING_STOP_MARKET)
 			activation = self._round_price(trailing_activation_price, tick_size)
+			activation_str = self._format_by_step(activation, tick_size_str)
 			callback = self._clamp_callback_rate(trailing_callback_percent)
+			# One decimal step for callbackRate
+			callback_str = format((Decimal(str(callback)).quantize(Decimal('0.1'), rounding=ROUND_DOWN)), 'f')
 			# Try to fetch current mark price for diagnostics
 			mark_price_val: Optional[float] = None
 			try:
@@ -477,31 +822,36 @@ class Binance_connect:
 			# Log trailing diagnostics
 			self._log(verbose, "Trailing params", {
 				"side": ("SELL" if side.upper() == "BUY" else "BUY"),
-				"activation": activation,
-				"callbackRate": callback,
+				"activation": activation_str,
+				"callbackRate": callback_str,
 				"markPrice": mark_price_val,
 			})
 			trailing_stop_payload = {
 				"symbol": symbol,
 				"side": ("SELL" if side.upper() == "BUY" else "BUY"),
 				"type": "TRAILING_STOP_MARKET",
-				"activationPrice": f"{activation}",
-				"callbackRate": f"{callback}",
+				"activationPrice": activation_str,
+				"callbackRate": callback_str,
 				"positionSide": position_side,
 				"recvWindow": self.recv_window_ms,
 			}
 			# choose sizing mode
-			if trailing_size_mode == "close_position":
-				trailing_stop_payload["closePosition"] = True
-				# do not pass quantity or reduceOnly with closePosition
-			else:
-				trailing_stop_payload["quantity"] = f"{qty_rounded}"
-				trailing_stop_payload["reduceOnly"] = reduce_only
+			trailing_stop_payload["quantity"] = qty_str
+			trailing_stop_payload["reduceOnly"] = reduce_only
 			# Log final payload (without secrets)
 			self._log(verbose, "Trailing payload", trailing_stop_payload)
-			trailing_stop_order = self.client.new_order(**trailing_stop_payload)
-			orders_raw["trailing_stop"] = trailing_stop_order
-			self._log(verbose, "Trailing-stop order placed", {"orderId": trailing_stop_order.get("orderId"), "response": trailing_stop_order})
+			trailing_stop_order = None
+			try:
+				if self.api_mode == "pm":
+					pm_payload = {k: v for k, v in trailing_stop_payload.items() if k != "recvWindow"}
+					trailing_stop_order = self._pm_request("POST", "/papi/v1/um/order", pm_payload)
+				else:
+					trailing_stop_order = self.client.new_order(**trailing_stop_payload)
+				orders_raw["trailing_stop"] = trailing_stop_order
+				self._log(verbose, "Trailing-stop order placed", {"orderId": (trailing_stop_order.get("orderId") if isinstance(trailing_stop_order, dict) else None), "response": trailing_stop_order})
+			except Exception as te:
+				# Non-fatal: keep entry and stop orders active; report in logs
+				self._log(True, "Trailing order failed (non-fatal)", {"error": str(te)})
 
 			return OrderResult(
 				success=True,
@@ -531,3 +881,52 @@ class Binance_connect:
 				trailing_stop_order=None,
 				raw=orders_raw,
 			) 
+
+	# -------- Helpers to (re)place trailing only --------
+	def place_trailing_reduce_only(
+		self,
+		*,
+		symbol: str,
+		side: str,
+		activation_price: float,
+		callback_percent: float,
+		quantity: float,
+		position_side: str = "BOTH",
+		reduce_only: bool = True,
+		working_type: str = "MARK_PRICE",
+		verbose: bool = True,
+	) -> bool:
+		try:
+			# Load filters for formatting
+			symbol_info = self._get_symbol_info(symbol)
+			filters = self._get_filters(symbol_info)
+			pf = filters.get("PRICE_FILTER", {})
+			ls = filters.get("LOT_SIZE", {})
+			tick_size_str = str(pf.get("tickSize", "0.0001"))
+			step_size_str = str(ls.get("stepSize", "1"))
+			activation_str = self._format_by_step(self._round_price(float(activation_price), float(pf.get("tickSize", 0.0)) or 0.0), tick_size_str)
+			qty_str = self._format_by_step(self._round_qty(float(quantity), float(ls.get("stepSize", 0.0)) or 0.0, float(ls.get("minQty", 0.0)) or 0.0), step_size_str)
+			callback = self._clamp_callback_rate(callback_percent)
+			callback_str = format((Decimal(str(callback)).quantize(Decimal('0.1'), rounding=ROUND_DOWN)), 'f')
+			payload = {
+				"symbol": symbol,
+				"side": side.upper(),
+				"type": "TRAILING_STOP_MARKET",
+				"activationPrice": activation_str,
+				"callbackRate": callback_str,
+				"positionSide": position_side,
+				"recvWindow": self.recv_window_ms,
+				"quantity": qty_str,
+				"reduceOnly": reduce_only,
+			}
+			self._log(verbose, "Trailing (re)place payload", payload)
+			if self.api_mode == "pm":
+				pm_payload = {k: v for k, v in payload.items() if k != "recvWindow"}
+				resp = self._pm_request("POST", "/papi/v1/um/order", pm_payload)
+			else:
+				resp = self.client.new_order(**payload)
+			self._log(verbose, "Trailing (re)placed", {"orderId": (resp.get("orderId") if isinstance(resp, dict) else None), "response": resp})
+			return True
+		except Exception as e:
+			self._log(True, "Trailing (re)place failed", {"symbol": symbol, "error": str(e)})
+			return False

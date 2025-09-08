@@ -15,8 +15,9 @@ import bot_funcs as bf
 import levels as lv
 from cooldown import Cooldown
 from db_funcs import DB_handler
-from user_data.credentials import apikey3, sub1_api_key, sub1_api_secret
+from user_data.credentials import apikey3, sub1_api_key_3, sub1_api_secret_3
 from binance_connect import Binance_connect
+from order_manager import OrderManager
 from fast_data import enable_fast_backend, fast_get_ohlcv
 
 bot = telebot.TeleBot(apikey3)
@@ -27,11 +28,14 @@ config = bf.load_config('config_5m_rm.json')
 chat_id = 234637822
 
 bnc_conn = Binance_connect(
-	api_key=sub1_api_key,
-	api_secret=sub1_api_secret,
+	api_key=sub1_api_key_3,
+	api_secret=sub1_api_secret_3,
 	log_to_file=config['general'].get('enable_trade_calc_logging', False),
 	log_file_path='logs/binance_connector.log',
+	api_mode=config['general'].get('futures_api_mode', 'classic'),
 )
+order_manager_enabled = bool(config['general'].get('use_order_manager', False))
+om = OrderManager(bnc_conn, config) if order_manager_enabled else None
 
 # Put real bank to config for dynamic pairs filtering
 try:
@@ -117,7 +121,7 @@ def check_pair(bot, chat_id, pair: str):
     for timeframe in checked_timeframes:
         df = _get_df(pair, timeframe)
         if timeframe == trading_timeframe:
-            last_candle = (df.iloc[df.shape[0] - 2])    # OHLCV data of the last closed candle as object
+            last_candle = (df.iloc[-1])    # Use the latest closed candle (schedule guarantees closure)
             basic_tf_ohlvc_df = df
         levels += lv.find_levels(df, timeframe)
     # time.sleep(0.5)
@@ -170,23 +174,46 @@ def check_pair(bot, chat_id, pair: str):
                 print(f'{trailing_callback_percent=}')
                         
                       
-            result = bnc_conn.place_futures_order_with_protection(
-                symbol=deal.pair,
-                side=side,
-                entry_price=deal.entry_price,
-                deviation_percent=0.1,
-                stop_loss_price=deal.stop_price,
-                trailing_activation_price=trailing_activation_price,
-                trailing_callback_percent=trailing_callback_percent,
-                leverage=config['deal_config']['leverage'],
-                risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],        # банк будет прочитан через account()
-                verbose=config['general'].get('enable_trade_calc_logging', False),
-            )
-
-            if result.success:
-                print("OK")
+            if order_manager_enabled and om:
+                result = om.place_managed_trade(
+                    symbol=deal.pair,
+                    side=side,
+                    entry_price=deal.entry_price,
+                    deviation_percent=0.1,
+                    stop_loss_price=deal.stop_price,
+                    trailing_activation_price=trailing_activation_price,
+                    trailing_callback_percent=trailing_callback_percent,
+                    leverage=config['deal_config']['leverage'],
+                    quantity=None,
+                    risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],
+                    position_side='BOTH',
+                    working_type='MARK_PRICE',
+                    time_in_force='GTC',
+                    deal_id=None,
+                    verbose=config['general'].get('enable_trade_calc_logging', False),
+                )
+                if result.get('success'):
+                    print("OK")
+                else:
+                    print("ERROR:", result.get('message'))
             else:
-                print("ERROR:", result.message, result.error_code)
+                result = bnc_conn.place_futures_order_with_protection(
+                    symbol=deal.pair,
+                    side=side,
+                    entry_price=deal.entry_price,
+                    deviation_percent=0.02,
+                    stop_loss_price=deal.stop_price,
+                    trailing_activation_price=trailing_activation_price,
+                    trailing_callback_percent=trailing_callback_percent,
+                    leverage=config['deal_config']['leverage'],
+                    risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],        # банк будет прочитан через account()
+                    verbose=config['general'].get('enable_trade_calc_logging', False),
+                )
+
+                if result.success:
+                    print("OK")
+                else:
+                    print("ERROR:", result.message, result.error_code)
                 
             
             deal_message = f"""
@@ -282,7 +309,57 @@ def main_func(trading_pairs: list, minute_flag: bool):
                 continue
             
     elif minute_flag:
+        print(f"[OM heartbeat] minute cleanup tick at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}")
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
+        if order_manager_enabled and om:
+            try:
+                # Diagnostics: dump all positions
+                try:
+                    positions = bnc_conn.get_all_positions()
+                    print("Positions (raw):")
+                    for p in positions:
+                        try:
+                            print(p)
+                        except Exception:
+                            pass
+                except Exception as ex:
+                    print(f'Failed to fetch positions: {ex}')
+
+                # Candidate symbols: non-zero positions
+                symbols = set()
+                try:
+                    for s in bnc_conn.get_nonzero_position_symbols():
+                        if s:
+                            symbols.add(s)
+                except Exception as ex:
+                    print(f'Failed to get non-zero positions: {ex}')
+
+                # Print open orders for non-zero position symbols
+                for s in list(symbols):
+                    try:
+                        oo = bnc_conn.get_open_orders(s)
+                        print(f'Open orders for {s}: {oo}')
+                    except Exception as ex:
+                        print(f'Failed to get open orders for {s}: {ex}')
+
+                # Also scan configured pairs for stray open orders to catch garbage after close
+                for s in trading_pairs:
+                    try:
+                        oo = bnc_conn.get_open_orders(s)
+                        if isinstance(oo, list) and len(oo) > 0:
+                            symbols.add(s)
+                            print(f'Found stray open orders on {s}: {len(oo)}')
+                    except Exception:
+                        pass
+
+                print(f'OrderManager cleanup: {len(symbols)} symbols => {list(symbols)}')
+                for sym in symbols:
+                    try:
+                        om.watch_and_cleanup(sym, verbose=True)
+                    except Exception as sym_ex:
+                        print(f'OrderManager cleanup error for {sym}: {sym_ex}')
+            except Exception as ex:
+                print('OrderManager cleanup error:', ex)
         
                     
                 
