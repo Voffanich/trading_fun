@@ -335,6 +335,33 @@ def get_daily_dynamic_pairs_filtered(config: dict) -> list[str]:
 	return list(_dynamic_pairs_cache['pairs'])
 
 
+def prepare_dynamic_pairs_bank(connector, config: dict) -> None:
+	"""
+	Определяет и записывает в config['general']['dynamic_pairs_bank'] актуальный банк
+	для отбора пар. Использует баланс типа 'collateral' (PM), с фолбэком на 'wallet',
+	затем на initial_bank_for_test_stats, если API недоступен.
+	"""
+	try:
+		bank_equity = 0.0
+		try:
+			bank_equity = connector.get_usdt_balance(balance_type='collateral')
+		except Exception:
+			pass
+		print(f"[PAIRS] Bank (equity/collateral)={bank_equity}")
+		try:
+			bank_wallet = connector.get_usdt_balance(balance_type='wallet')
+		except Exception:
+			bank_wallet = 0.0
+		chosen_bank = bank_equity if (bank_equity and bank_equity > 0) else (
+			bank_wallet if (bank_wallet and bank_wallet > 0) else float(config['general'].get('initial_bank_for_test_stats', 0) or 0)
+		)
+		config['general']['dynamic_pairs_bank'] = chosen_bank
+		print(f"[PAIRS] Dynamic bank_usdt={config['general']['dynamic_pairs_bank']}")
+	except Exception as ex:
+		print('[PAIRS] Failed to fetch balances for dynamic pairs filter:', ex)
+		config['general']['dynamic_pairs_bank'] = config['general'].get('initial_bank_for_test_stats', 0)
+
+
 def define_checked_timeframes(used_timeframes: list, timeframe: str) -> list:
 	del used_timeframes[0:used_timeframes.index(timeframe)]
 	return used_timeframes
@@ -740,4 +767,105 @@ def validate_indicators(deal: object, deal_config: dict, basic_tf_ohlvc_df: pd.D
 		else:
 			print('Short ELSE!!')    
 			return True
+		
+
+def select_trading_pairs_rm_style(config: dict, count: int = 30) -> list[str]:
+	"""
+	Ровно та же логика отбора пар, что была в bot_5m_rm.py (рабочий вариант):
+	- Берём top-N по 24h quoteVolume
+	- Для каждого считаем риск-основанное qty с использованием strictly stop_distance_threshold
+	- Округляем qty вниз к stepSize, проверяем minQty и minNotional
+	- Возвращаем top `count` eligible по quoteVolume
+	"""
+	def _fetch_24h_tickers() -> list:
+		try:
+			r = requests.get('https://fapi.binance.com/fapi/v1/ticker/24hr', timeout=10)
+			r.raise_for_status()
+			return r.json()
+		except Exception as e:
+			print('[PAIRS] fetch 24h failed:', e)
+			return []
+
+	def _fetch_exchange_filters() -> dict:
+		try:
+			r = requests.get('https://fapi.binance.com/fapi/v1/exchangeInfo', timeout=10)
+			r.raise_for_status()
+			info = r.json() or {}
+			m = {}
+			for s in info.get('symbols', []):
+				fs = {}
+				for f in s.get('filters', []):
+					ft = f.get('filterType')
+					if ft:
+						fs[ft] = f
+				m[s.get('symbol')] = fs
+			return m
+		except Exception as e:
+			print('[PAIRS] fetch exchangeInfo failed:', e)
+			return {}
+
+	bank_usdt = float(config['general'].get('dynamic_pairs_bank', 0) or 0)
+	risk = float(config['deal_config'].get('deal_risk_perc_of_bank', 0.0))
+	# строго из stop_distance_threshold
+	stop_perc = float(config['deal_config'].get('stop_distance_threshold', 1.0))
+	stop_pct = max(0.01, stop_perc) / 100.0
+	print(f"[PAIRS] Selecting top {count} by 24h quoteVolume; risk={risk}, bank={bank_usdt}, stop%={stop_perc}")
+	data = _fetch_24h_tickers()
+	# Pre-sort by quote volume, then consider only top_k for filter evaluation to speed up
+	tmp = []
+	for d in data:
+		try:
+			sym = d.get('symbol')
+			if not sym or not sym.endswith('USDT') or '_' in sym:
+				continue
+			qvol = float(d.get('quoteVolume', 0) or 0)
+			last_price = float(d.get('lastPrice', 0) or 0)
+			tmp.append((sym, qvol, last_price))
+		except Exception:
+			continue
+	tmp.sort(key=lambda x: x[1], reverse=True)
+	top_k = tmp[:max(count * 4, 120)]
+	filters_map = _fetch_exchange_filters()
+	cands = []
+	for sym, qvol, last_price in top_k:
+		fs = filters_map.get(sym) or {}
+		try:
+			mnf = fs.get('MIN_NOTIONAL', {})
+			min_notional = float(mnf.get('notional', mnf.get('minNotional', 0)) or 0)
+		except Exception:
+			min_notional = 0.0
+		try:
+			lsf = fs.get('LOT_SIZE', {})
+			min_qty = float(lsf.get('minQty', 0) or 0)
+			step = float(lsf.get('stepSize', 0) or 0)
+		except Exception:
+			min_qty, step = 0.0, 0.0
+		ok = True
+		if last_price <= 0 or stop_pct <= 0 or bank_usdt <= 0 or risk <= 0:
+			ok = False
+		else:
+			risk_amount = bank_usdt * (risk / 100.0)
+			qty_risk = risk_amount / (last_price * stop_pct)
+			if step > 0:
+				steps = int(qty_risk / step)
+				qty_rounded = steps * step
+			else:
+				qty_rounded = qty_risk
+			if qty_rounded < max(min_qty, 0):
+				ok = False
+			else:
+				notional = qty_rounded * last_price
+				if min_notional > 0 and notional < min_notional:
+					ok = False
+		cands.append({
+			"symbol": sym,
+			"quoteVolume": qvol,
+			"eligible": ok
+		})
+	cands.sort(key=lambda x: x['quoteVolume'], reverse=True)
+	selected = [c['symbol'] for c in cands if c['eligible']][:count]
+	print(f"[PAIRS] Eligible count={sum(1 for c in cands if c['eligible'])} / total_checked={len(cands)}")
+	print(f"[PAIRS] Selected ({len(selected)}): {', '.join(selected)}")
+	return selected
+		
 		

@@ -24,7 +24,7 @@ bot = telebot.TeleBot(apikey3)
 # Enable connector file logging if enabled in config (same flag as verbose calc logging)
 # Note: config loaded below; create bnc_conn after config is available
 
-config = bf.load_config('config_5m_rm.json')
+config = bf.load_config('config_5m_rm_rev.json')
 chat_id = 234637822
 
 # Initialize connector (IM classic or PM portfolio)
@@ -218,17 +218,20 @@ def check_pair(bot, chat_id, pair: str):
             trailing_callback_part = config['deal_config']['trailing_callback_percent_of_stop_price']
                         
             if deal.direction == 'long':
-                trailing_activation_price = deal.entry_price * (1 + trailing_activation_part * deal.stop_dist_perc / 100)
+                trailing_activation_price = deal.stop_price
                 trailing_callback_percent = round(trailing_callback_part * deal.stop_dist_perc, 1)
-                side = 'BUY'
+                stop_price = deal.entry_price * (1 + trailing_activation_part * deal.stop_dist_perc / 100)
+                side = 'SELL'
+                
                 
                 print(side)
                 print(f'{trailing_activation_price=}')
                 print(f'{trailing_callback_percent=}')
             else:
-                trailing_activation_price = deal.entry_price * (1 - trailing_activation_part * deal.stop_dist_perc / 100)
+                trailing_activation_price = deal.stop_price
                 trailing_callback_percent = round(trailing_callback_part * deal.stop_dist_perc, 1)
-                side = 'SELL'
+                stop_price = deal.entry_price * (1 - trailing_activation_part * deal.stop_dist_perc / 100)
+                side = 'BUY'
                 
                 print(side)
                 print(f'{trailing_activation_price=}')
@@ -240,8 +243,8 @@ def check_pair(bot, chat_id, pair: str):
                     symbol=deal.pair,
                     side=side,
                     entry_price=deal.entry_price,
-                    deviation_percent=0.1,
-                    stop_loss_price=deal.stop_price,
+                    deviation_percent=-0.1,
+                    stop_loss_price=stop_price,
                     trailing_activation_price=trailing_activation_price,
                     trailing_callback_percent=trailing_callback_percent,
                     leverage=config['deal_config']['leverage'],
@@ -435,7 +438,6 @@ def _om_minute_cleanup(mode: str = 'auto'):
 		print(f"[OM-CLEAN] Cleanup completed for {len(symbols)} symbols")
 	except Exception as e:
 		print(f"[OM-CLEAN] Overall cleanup failed: {e}")
-
 # Local aligned scheduler (no second pairs selection)
 
 def _schedule_aligned(timeframe: str):

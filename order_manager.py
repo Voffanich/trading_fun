@@ -195,7 +195,7 @@ class OrderManager:
 			# brief log of state
 			self._log("cleanup_state", {"symbol": symbol, "open_orders": len(open_orders or []), "entries": len(entries), "protections": len(protections), "pos_abs": qty_abs})
 
-			if qty_abs == 0:
+			if qty_abs == 0:c
 				# Evaluate TTL for entries (if any)
 				now_ms = int(time.time() * 1000)
 				def _ts(o: Dict[str, Any]) -> int:
@@ -239,7 +239,7 @@ class OrderManager:
 				except Exception as inner_ex:
 					self._log("watch_cleanup_rearm_error", {"symbol": symbol, "error": str(inner_ex)})
 					return
-				return
+					return
 		except Exception as e:
 			self._log("watch_and_cleanup_error", {"symbol": symbol, "error": str(e)})
 			return
