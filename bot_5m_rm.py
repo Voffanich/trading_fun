@@ -16,7 +16,7 @@ import levels as lv
 from cooldown import Cooldown
 from db_funcs import DB_handler
 from user_data.credentials import apikey3, sub1_api_key_3, sub1_api_secret_3
-from binance_connect import Binance_connect
+from binance_connector import ClassicIMConnector, PortfolioPMConnector
 from order_manager import OrderManager
 from fast_data import enable_fast_backend, fast_get_ohlcv
 
@@ -27,38 +27,159 @@ bot = telebot.TeleBot(apikey3)
 config = bf.load_config('config_5m_rm.json')
 chat_id = 234637822
 
-bnc_conn = Binance_connect(
-	api_key=sub1_api_key_3,
-	api_secret=sub1_api_secret_3,
-	log_to_file=config['general'].get('enable_trade_calc_logging', False),
-	log_file_path='logs/binance_connector.log',
-	api_mode=config['general'].get('futures_api_mode', 'classic'),
-)
-order_manager_enabled = bool(config['general'].get('use_order_manager', False))
+# Initialize connector (IM classic or PM portfolio)
+api_mode = config['general'].get('futures_api_mode', 'classic')
+use_pm = (str(api_mode).lower() in ('pm', 'portfolio', 'portfolio_margin'))
+if use_pm:
+	bnc_conn = PortfolioPMConnector(api_key=sub1_api_key_3, api_secret=sub1_api_secret_3, recv_window_ms=60000, log=bool(config['general'].get('enable_trade_calc_logging', False)))
+else:
+	bnc_conn = ClassicIMConnector(api_key=sub1_api_key_3, api_secret=sub1_api_secret_3, recv_window_ms=60000, log=bool(config['general'].get('enable_trade_calc_logging', False)))
+
+order_manager_enabled = bool(config['general'].get('use_order_manager', True))
 om = OrderManager(bnc_conn, config) if order_manager_enabled else None
 
 # Put real bank to config for dynamic pairs filtering
 try:
-	# Bank (equity) for PM
-	bank_equity = bnc_conn.get_usdt_balance(balance_type='collateral')
-	# Additional diagnostics (optional)
-	bank_available = 0.0
-	bank_wallet = 0.0
+	# Use collateral equity consistently for dynamic pairs filtering
+	bank_equity = 0.0
 	try:
-		bank_available = bnc_conn.get_usdt_balance(balance_type='available')
+		bank_equity = bnc_conn.get_usdt_balance(balance_type='collateral')
 	except Exception:
 		pass
+	print(f"[PAIRS] Bank (equity/collateral)={bank_equity}")
+	# Prefer equity; if zero/unavailable, fallback to wallet; then to initial from config
 	try:
 		bank_wallet = bnc_conn.get_usdt_balance(balance_type='wallet')
 	except Exception:
-		pass
-	print(f"PM balances: equity={bank_equity}, available={bank_available}, wallet={bank_wallet}")
-	# Choose bank for dynamic pairs: prefer equity; fallback to wallet; then initial
-	config['general']['dynamic_pairs_bank'] = (bank_equity or bank_wallet or config['general'].get('initial_bank_for_test_stats', 0))
-	print(f"Dynamic pairs filter bank_usdt={config['general']['dynamic_pairs_bank']}")
+		bank_wallet = 0.0
+	chosen_bank = bank_equity if (bank_equity and bank_equity > 0) else (bank_wallet if (bank_wallet and bank_wallet > 0) else float(config['general'].get('initial_bank_for_test_stats', 0) or 0))
+	config['general']['dynamic_pairs_bank'] = chosen_bank
+	print(f"[PAIRS] Dynamic bank_usdt={config['general']['dynamic_pairs_bank']}")
 except Exception as ex:
-	print('Failed to fetch PM balances for dynamic pairs filter:', ex)
+	print('[PAIRS] Failed to fetch balances for dynamic pairs filter:', ex)
 	config['general']['dynamic_pairs_bank'] = config['general'].get('initial_bank_for_test_stats', 0)
+
+# Local dynamic trading pairs selection (first/working one)
+from datetime import datetime, timedelta
+
+def _fetch_24h_tickers() -> list:
+	try:
+		r = requests.get('https://fapi.binance.com/fapi/v1/ticker/24hr', timeout=10)
+		r.raise_for_status()
+		return r.json()
+	except Exception as e:
+		print('[PAIRS] fetch 24h failed:', e)
+		return []
+
+
+def _fetch_exchange_filters() -> dict:
+	"""Return mapping: symbol -> {filterType: filterDict} using one exchangeInfo call."""
+	try:
+		r = requests.get('https://fapi.binance.com/fapi/v1/exchangeInfo', timeout=10)
+		r.raise_for_status()
+		info = r.json() or {}
+		m = {}
+		for s in info.get('symbols', []):
+			fs = {}
+			for f in s.get('filters', []):
+				ft = f.get('filterType')
+				if ft:
+					fs[ft] = f
+			m[s.get('symbol')] = fs
+		return m
+	except Exception as e:
+		print('[PAIRS] fetch exchangeInfo failed:', e)
+		return {}
+
+
+def select_trading_pairs(count: int = 30) -> list:
+	bank_usdt = float(config['general'].get('dynamic_pairs_bank', 0) or 0)
+	risk = float(config['deal_config'].get('deal_risk_perc_of_bank', 0.0))
+	# предполагаемая минимальная дистанция до стопа (%, из конфига для отбора пар)
+	stop_perc = float(config['deal_config'].get('selection_stop_distance_perc', 1.0))
+	stop_pct = max(0.01, stop_perc) / 100.0
+	leverage = float(config['deal_config'].get('leverage', 1) or 1)
+	print(f"[PAIRS] Selecting top {count} by 24h quoteVolume; risk={risk}, bank={bank_usdt}, stop%={stop_perc}")
+	data = _fetch_24h_tickers()
+	# Pre-sort by quote volume, then consider only top_k for filter evaluation to speed up
+	tmp = []
+	for d in data:
+		try:
+			sym = d.get('symbol')
+			if not sym or not sym.endswith('USDT') or '_' in sym:
+				continue
+			qvol = float(d.get('quoteVolume', 0) or 0)
+			last_price = float(d.get('lastPrice', 0) or 0)
+			tmp.append((sym, qvol, last_price))
+		except Exception:
+			continue
+	tmp.sort(key=lambda x: x[1], reverse=True)
+	top_k = tmp[:max(count * 4, 120)]  # cap checks to first N
+	filters_map = _fetch_exchange_filters()
+	cands = []
+	for sym, qvol, last_price in top_k:
+		fs = filters_map.get(sym) or {}
+		try:
+			mnf = fs.get('MIN_NOTIONAL', {})
+			min_notional = float(mnf.get('notional', mnf.get('minNotional', 0)) or 0)
+		except Exception:
+			min_notional = 0.0
+		try:
+			lsf = fs.get('LOT_SIZE', {})
+			min_qty = float(lsf.get('minQty', 0) or 0)
+			step = float(lsf.get('stepSize', 0) or 0)
+		except Exception:
+			min_qty, step = 0.0, 0.0
+		# compute risk-based qty (loss ~= notional * stop_pct); leverage does not change loss vs notional
+		ok = True
+		if last_price <= 0 or stop_pct <= 0 or bank_usdt <= 0 or risk <= 0:
+			ok = False
+		else:
+			risk_amount = bank_usdt * (risk / 100.0)
+			qty_risk = risk_amount / (last_price * stop_pct)
+			# round DOWN to step; do not increase qty to avoid raising risk
+			if step > 0:
+				steps = int(qty_risk / step)
+				qty_rounded = steps * step
+			else:
+				qty_rounded = qty_risk
+			# validate rounded qty
+			if qty_rounded < max(min_qty, 0):
+				ok = False
+			else:
+				notional = qty_rounded * last_price
+				if min_notional > 0 and notional < min_notional:
+					ok = False
+		cands.append({
+			"symbol": sym,
+			"quoteVolume": qvol,
+			"eligible": ok
+		})
+	# sort by quoteVolume desc
+	cands.sort(key=lambda x: x['quoteVolume'], reverse=True)
+	selected = [c['symbol'] for c in cands if c['eligible']][:count]
+	print(f"[PAIRS] Eligible count={sum(1 for c in cands if c['eligible'])} / total_checked={len(cands)}")
+	print(f"[PAIRS] Selected ({len(selected)}): {', '.join(selected)}")
+	return selected
+
+
+def schedule_daily_pairs_refresh():
+	def _worker():
+		while True:
+			now = datetime.now()
+			next_run = (now + timedelta(days=1)).replace(hour=0, minute=1, second=0, microsecond=0)
+			sleep_sec = max(1, int((next_run - now).total_seconds()))
+			time.sleep(sleep_sec)
+			try:
+				pairs = select_trading_pairs(30)
+				if pairs:
+					global trading_pairs
+					trading_pairs = pairs
+					print('[PAIRS] Daily refresh applied')
+			except Exception as e:
+				print('[PAIRS] Daily refresh failed:', e)
+	thr = threading.Thread(target=_worker, daemon=True)
+	thr.start()
 
 # init fast backend
 enable_fast_backend(use_fast=bool(config['general'].get('use_fast_data', False)),
@@ -69,12 +190,10 @@ enable_fast_backend(use_fast=bool(config['general'].get('use_fast_data', False))
 db = DB_handler(config["general"]["db_file_name"])
 db.setup()
 
-pair = "ETHUSDT" # Trading pair
-# pair = "API3USDT" # Trading pair
-# pair = "BTCUSDT" # Trading pair
-# pair = "AKROUSDT"
+# initial pairs selection (first/working)
+trading_pairs = select_trading_pairs(30)
+schedule_daily_pairs_refresh()
 
-trading_pairs = config['general']['trading_pairs']
 trading_timeframe = config['general']['trading_timeframe'] # Timeframe 
 checked_timeframes = bf.define_checked_timeframes(config['general']['timeframes_used'], trading_timeframe)
 limit = config['levels']['candle_depth']  # Limit of candles requested 
@@ -133,6 +252,9 @@ def check_pair(bot, chat_id, pair: str):
 
     levels = []       # list of levels of all checked timeframes at current moment
 
+    last_candle = None
+    basic_tf_ohlvc_df = None
+
     for timeframe in checked_timeframes:
         df = _get_df(pair, timeframe)
         if timeframe == trading_timeframe:
@@ -150,6 +272,9 @@ def check_pair(bot, chat_id, pair: str):
     levels = lv.merge_timeframe_levels(levels)
     
     # lv.print_levels(levels)
+
+    if last_candle is None or basic_tf_ohlvc_df is None:
+        return
 
     deal = lv.check_deal(bot, chat_id, levels, last_candle, deal_config, trading_timeframe)
     print(f'{deal=}')
@@ -204,32 +329,15 @@ def check_pair(bot, chat_id, pair: str):
                     position_side='BOTH',
                     working_type='MARK_PRICE',
                     time_in_force='GTC',
-                    deal_id=None,
-                    verbose=config['general'].get('enable_trade_calc_logging', False),
+                    balance_type='collateral',
                 )
                 if result.get('success'):
                     print("OK")
                 else:
                     print("ERROR:", result.get('message'))
             else:
-                result = bnc_conn.place_futures_order_with_protection(
-                    symbol=deal.pair,
-                    side=side,
-                    entry_price=deal.entry_price,
-                    deviation_percent=0.02,
-                    stop_loss_price=deal.stop_price,
-                    trailing_activation_price=trailing_activation_price,
-                    trailing_callback_percent=trailing_callback_percent,
-                    leverage=config['deal_config']['leverage'],
-                    risk_percent_of_bank=config['deal_config']['deal_risk_perc_of_bank'],        # банк будет прочитан через account()
-                    verbose=config['general'].get('enable_trade_calc_logging', False),
-                )
-
-                if result.success:
-                    print("OK")
-                else:
-                    print("ERROR:", result.message, result.error_code)
-                
+                # Legacy direct connector branch is disabled for new PM/IM connector
+                print("OrderManager disabled by config; skipping direct placement.")
             
             deal_message = f"""
             Найдена сделка:
@@ -304,16 +412,26 @@ def func(message):
 
 
 
+
+
 def main_func(trading_pairs: list, minute_flag: bool):
+    
+    # always use dynamically refreshed global list selected by our first-stage filter
+    try:
+        current_pairs = list(globals().get('trading_pairs', []) or [])
+    except Exception:
+        current_pairs = trading_pairs
     
     if minute_flag:
         print(f'\nChecking active deals at {dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")}')
     elif not minute_flag:
+        # explicit boundary calc start log
+        print(f"[TF] {trading_timeframe} boundary at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')} — starting deals calculation for {len(current_pairs)} pairs")
         print(dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S'))
         bot.send_message(chat_id, text=f"Checking candles {trading_timeframe} at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}" )   
     
     if not minute_flag:
-        for pair in trading_pairs:
+        for pair in current_pairs:
             print(f'Pair {pair}')
             
             try:
@@ -322,53 +440,123 @@ def main_func(trading_pairs: list, minute_flag: bool):
                 print(f'{bf.timestamp()} - Some fucking error happened')
                 print(ex)
                 continue
-            
+        # explicit end log for timeframe calc
+        print(f"[TF] {trading_timeframe} boundary calculation finished at {dt.strftime(dt.now(), '%Y-%m-%d %H:%M:%S')}")
+        
     elif minute_flag:
         bf.check_active_deals(db, cd, bot, chat_id, reverse=reverse)
-        # Disable verbose OM heartbeat/diagnostics; run cleanup only if explicitly enabled in config
-        if order_manager_enabled and om and bool(config['general'].get('enable_om_minute_cleanup', False)):
-            try:
-                symbols = set()
-                try:
-                    for s in bnc_conn.get_nonzero_position_symbols():
-                        if s:
-                            symbols.add(s)
-                except Exception:
-                    pass
-                for s in trading_pairs:
-                    try:
-                        oo = bnc_conn.get_open_orders(s)
-                        if isinstance(oo, list) and len(oo) > 0:
-                            symbols.add(s)
-                    except Exception:
-                        pass
-                for sym in symbols:
-                    try:
-                        om.watch_and_cleanup(sym, verbose=False)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
         
-                    
+                     
                 
         
     print(f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
     # bot.send_message(chat_id, text=f'\nWaiting for the beginning of the {trading_timeframe} timeframe period')
     
 
-# set_schedule(timeframe)
-# while True:
-#     schedule.run_pending()
-#     time.sleep(1)
+# Dedicated OM cleanup to run BEFORE/AFTER depending on timeframe boundary
 
-if config['general'].get('use_dynamic_trading_pairs'):
-    sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule_dynamic, kwargs = {'timeframe':trading_timeframe, 
-                                                    'task':main_func, 'config':config}, daemon = True)
-else:
-    sсheduled_tasks_thread = threading.Thread(target = bf.set_schedule, kwargs = {'timeframe':trading_timeframe, 
-                                                    'task':main_func, 'trading_pairs':trading_pairs}, daemon = True)
-    
+def _is_timeframe_boundary(now_dt: dt, timeframe: str) -> bool:
+	try:
+		if timeframe.endswith('m'):
+			mins = int(timeframe[:-1])
+			return (now_dt.minute % mins) == 0
+		if timeframe.endswith('h'):
+			hours = int(timeframe[:-1])
+			return (now_dt.hour % hours) == 0 and now_dt.minute == 0
+		if timeframe.endswith('d'):
+			return now_dt.hour == 0 and now_dt.minute == 0
+	except Exception:
+		return False
+	return False
+
+
+def _om_minute_cleanup(mode: str = 'auto'):
+	if not (order_manager_enabled and om):
+		return
+	# Skip/Run depending on boundary and mode
+	now_dt = dt.now()
+	is_boundary = _is_timeframe_boundary(now_dt, trading_timeframe)
+	if mode == 'before' and is_boundary:
+		return
+	if mode == 'after' and not is_boundary:
+		return
+	# 'auto' mode runs always
+	try:
+		# Build symbol set using bulk queries
+		symbols: set = set()
+		try:
+			open_orders = bnc_conn.get_all_open_orders()
+			for o in (open_orders or []):
+				sym = o.get('symbol') or o.get('symbolName')
+				if sym:
+					symbols.add(sym)
+		except Exception:
+			pass
+		try:
+			pos_syms = bnc_conn.get_nonzero_position_symbols()
+			symbols.update(pos_syms)
+		except Exception:
+			pass
+		for sym in symbols:
+			try:
+				print(f"[OM-CLEAN] symbol={sym} …")
+				om.watch_and_cleanup(sym)
+			except Exception:
+				pass
+	except Exception:
+		pass
+
+# Local aligned scheduler (no second pairs selection)
+
+def _schedule_aligned(timeframe: str):
+	print(f'Waiting for the beginning of the {timeframe} timeframe period...\n')
+	# run order calc first (timeframe at :01 where applicable), then OM cleanup at :02, then active deals at :03
+	schedule.every().minute.at(":02").do(_om_minute_cleanup, 'auto')
+	schedule.every().minute.at(":03").do(main_func, [], True)
+	# timeframe triggers at :01 pattern
+	if timeframe == "1m":
+		schedule.every().minute.at(":01").do(main_func, [], False)
+	elif timeframe == "5m":
+		schedule.every().hour.at("00:01").do(main_func, [], False)
+		schedule.every().hour.at("05:01").do(main_func, [], False)
+		schedule.every().hour.at("10:01").do(main_func, [], False)
+		schedule.every().hour.at("15:01").do(main_func, [], False)
+		schedule.every().hour.at("20:01").do(main_func, [], False)
+		schedule.every().hour.at("25:01").do(main_func, [], False)
+		schedule.every().hour.at("30:01").do(main_func, [], False)
+		schedule.every().hour.at("35:01").do(main_func, [], False)
+		schedule.every().hour.at("40:01").do(main_func, [], False)
+		schedule.every().hour.at("45:01").do(main_func, [], False)
+		schedule.every().hour.at("50:01").do(main_func, [], False)
+		schedule.every().hour.at("55:01").do(main_func, [], False)
+	elif timeframe == "15m":
+		schedule.every().hour.at("00:01").do(main_func, [], False)
+		schedule.every().hour.at("15:01").do(main_func, [], False)
+		schedule.every().hour.at("30:01").do(main_func, [], False)
+		schedule.every().hour.at("45:01").do(main_func, [], False)
+	elif timeframe == "1h":
+		schedule.every().hour.at("00:01").do(main_func, [], False)
+	elif timeframe == "4h":
+		schedule.every().day.at("00:00:01").do(main_func, [], False)
+		schedule.every().day.at("04:00:01").do(main_func, [], False)
+		schedule.every().day.at("08:00:01").do(main_func, [], False)
+		schedule.every().day.at("12:00:01").do(main_func, [], False)
+		schedule.every().day.at("16:00:01").do(main_func, [], False)
+		schedule.every().day.at("20:00:01").do(main_func, [], False)
+	elif timeframe == "1d":
+		schedule.every().day.at("00:00:01").do(main_func, [], False)
+	else:
+		print("Invalid time period string")
+
+	while True:
+		try:
+			schedule.run_pending()
+			time.sleep(1)
+		except Exception:
+			time.sleep(1)
+
+sсheduled_tasks_thread = threading.Thread(target=_schedule_aligned, args=(trading_timeframe,), daemon=True)
+
 if __name__ == '__main__':
     sсheduled_tasks_thread.start()
     bot.infinity_polling()
